@@ -1,0 +1,176 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ovannotators"
+version = "0.1.0"
+description = "Ground-truth annotation library for Isaac Sim / OmniVerse renderers"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+dependencies = [
+    "numpy",
+    "Pillow>=12.3.0",
+    "openexr",
+    "warp-lang",
+]
+
+[project.optional-dependencies]
+# --- Individual feature extras (CPU-installable, no GPU required) ---
+s3 = [
+    "boto3",
+]
+storage-api = [
+    "httpx",
+]
+lerobot = [
+    "pyarrow",
+]
+# --- GPU-only feature extras (require an NVIDIA GPU + CUDA at runtime) ---
+gpu = [
+    "nvidia-nvimgcodec-cu12",
+]
+video = [
+    "PyNvVideoCodec",
+]
+# --- Aggregate runtime extras ---
+# CPU-installable feature set: everything that works without a GPU.
+all-cpu = [
+    "ovannotators[s3,storage-api,lerobot]",
+]
+# Full GPU runtime: the CPU set plus the GPU-only codecs.
+all-gpu = [
+    "ovannotators[all-cpu,gpu,video]",
+]
+# Convenience alias for "every runtime extra", plus the test tooling so that
+# ``uv sync --extra all`` yields an environment that can both run the full
+# feature set and execute the test suite. Implies GPU/CUDA (cu12) via all-gpu;
+# use all-cpu if you need a GPU-free runtime install without test deps.
+all = [
+    "ovannotators[all-gpu,test]",
+]
+# --- Test / development extras ---
+# Minimal test tooling (no GPU runtime). Reused by ``all`` and ``dev-cpu`` so
+# there is a single source of truth for what the test suite needs.
+test = [
+    "pytest",
+    "pytest-cov",
+    "pytest-benchmark",
+    "pyyaml",
+]
+# --- Development extras ---
+# CPU-only dev environment: tooling + the CPU feature set. Used by CI, which
+# has no GPU. boto3/httpx/pyarrow come transitively from all-cpu.
+dev-cpu = [
+    "ruff",
+    "sphinx",
+    "nvidia-sphinx-theme",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "myst-parser",
+    "ovannotators[all-cpu,test]",
+]
+# Full local dev environment: CPU dev tooling + GPU runtime + ovrtx renderer.
+dev = [
+    "ovannotators[dev-cpu,gpu,video]",
+    "ovrtx",
+]
+
+[project.entry-points."ovannotators.renderer_outputs"]
+ovrtx = "ovannotators.renderer_outputs.ovrtx:OvrtxOutput"
+
+[project.entry-points."ovannotators.writers"]
+basic = "ovannotators.writers.basic:BasicWriter"
+coco = "ovannotators.writers.coco:COCOWriter"
+kitti = "ovannotators.writers.kitti:KITTIWriter"
+yolo = "ovannotators.writers.yolo:YOLOWriter"
+bop = "ovannotators.writers.bop:BOPWriter"
+lerobot = "ovannotators.writers.lerobot:LeRobotWriter"
+cosmos_transfer = "ovannotators.writers.cosmos_transfer:CosmosTransferWriter"
+
+[project.entry-points."ovannotators.backends"]
+disk = "ovannotators.backends.disk:DiskBackend"
+s3 = "ovannotators.backends.s3:S3Backend"
+storage_api = "ovannotators.backends.storage_api:StorageAPIBackend"
+
+[tool.uv]
+managed = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["source/ovannotators"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "source/ovannotators/",
+    "tests/",
+    "scripts/",
+    "docs/public/",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+]
+
+[tool.pytest.ini_options]
+# Benchmarks and GPU tests are skipped by default in regular test runs. Emit
+# JUnit XML for OV-PLC result analysis/heatmaps and use strict marker checking
+# so taxonomy typos fail loudly.
+addopts = "--strict-markers --junitxml=_build/results.xml -p no:benchmark --ignore=tests/benchmarks -m 'not gpu and not flaky and not experimental'"
+testpaths = ["tests"]
+markers = [
+    # --- type axis ---
+    "unit: isolated single-unit test (default)",
+    "integration: exercises 2-3 modules together",
+    "e2e: full system / end-to-end test",
+    "smoke: minimal fast sanity check",
+    "benchmark: performance/benchmark test",
+    # --- resource axis ---
+    "cpu_only: runs without a GPU (default)",
+    "gpu: full pipeline tests requiring GPU + ovrtx (run locally, skipped on CI)",
+    "multi_gpu: requires more than one GPU",
+    "network: requires network / external services",
+    # --- duration axis ---
+    "duration: duration axis marker (defaults to duration_1s)",
+    "duration_1s: 1-9 seconds (default)",
+    "duration_10s: 10-99 seconds",
+    "duration_100s: 100-999 seconds",
+    "duration_1000s: 1000+ seconds",
+    # --- stability axis ---
+    "stable: deterministic, gates merges (default)",
+    "flaky: unexplained non-determinism; quarantined, does not gate",
+    "known_failure_rate: documented inherent non-determinism; retried and monitored",
+    "experimental: new/unproven; does not gate",
+]
+filterwarnings = [
+    # PyNvVideoCodec imports the deprecated ``ast.Str`` at import time. This is
+    # a third-party issue we cannot fix; ignore only that specific warning.
+    "ignore:ast.Str is deprecated:DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["source/ovannotators"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "@overload",
+    # Protocol/ABC method bodies that are just an ellipsis are never executed.
+    "^\\s*\\.\\.\\.\\s*$",
+    "wp\\.init",
+    "wp\\.config",
+    "except ImportError",
+    # Warp kernels and device functions are AST-transpiled to native code;
+    # their Python bodies are never executed line-by-line, so they cannot be
+    # traced.
+    "@wp\\.kernel",
+    "@wp\\.func",
+]
+
+[tool.pytest-benchmark]
+# Default benchmark settings
+min_rounds = 5
+min_time = 0.1
+max_time = 5.0

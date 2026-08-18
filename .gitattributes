@@ -1,0 +1,8 @@
+tests/golden/**/*.png filter=lfs diff=lfs merge=lfs -text
+tests/golden/**/*.npy filter=lfs diff=lfs merge=lfs -text
+tests/golden/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+tests/golden/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+tests/golden/**/*.parquet filter=lfs diff=lfs merge=lfs -text
+tests/golden/**/*.exr filter=lfs diff=lfs merge=lfs -text
+*.usd filter=lfs diff=lfs merge=lfs -text
+*.usda filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,26 @@
+{
+  "clips": [
+    {
+      "clip_id": 0,
+      "conditioning": {
+        "canny": "conditioning/000000_canny.mp4",
+        "depth": "conditioning/000000_depth.mp4",
+        "segmentation": "conditioning/000000_segmentation.mp4"
+      },
+      "conditioning_types": [
+        "canny",
+        "depth",
+        "segmentation"
+      ],
+      "fps": 24,
+      "num_frames": 1,
+      "resolution": [
+        1280,
+        720
+      ],
+      "rgb_video": "videos/000000_rgb.mp4",
+      "thumbnail": "thumbnails/000000.jpg"
+    }
+  ],
+  "version": "cosmos-transfer-2.5"
+}

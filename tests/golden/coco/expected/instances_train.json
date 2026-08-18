@@ -1,0 +1,116 @@
+{
+  "info": {
+    "description": "ovannotators synthetic dataset",
+    "version": "1.0",
+    "year": 2024
+  },
+  "licenses": [
+    {
+      "id": 0,
+      "name": "Synthetic \u2014 no license"
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "plane",
+      "supercategory": ""
+    },
+    {
+      "id": 2,
+      "name": "cube",
+      "supercategory": ""
+    },
+    {
+      "id": 3,
+      "name": "sphere",
+      "supercategory": ""
+    },
+    {
+      "id": 4,
+      "name": "cone",
+      "supercategory": ""
+    }
+  ],
+  "images": [
+    {
+      "id": 1,
+      "file_name": "000000.jpg",
+      "width": 1280,
+      "height": 720,
+      "license": 0
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "bbox": [
+        0.0,
+        0.0,
+        1279.0,
+        719.0
+      ],
+      "area": 919601.0,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 2,
+      "image_id": 1,
+      "category_id": 2,
+      "bbox": [
+        767.0,
+        272.0,
+        184.0,
+        165.0
+      ],
+      "area": 30360.0,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 3,
+      "image_id": 1,
+      "category_id": 2,
+      "bbox": [
+        783.0,
+        130.0,
+        194.0,
+        194.0
+      ],
+      "area": 37636.0,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 4,
+      "image_id": 1,
+      "category_id": 3,
+      "bbox": [
+        361.0,
+        196.0,
+        124.0,
+        124.0
+      ],
+      "area": 15376.0,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 5,
+      "image_id": 1,
+      "category_id": 4,
+      "bbox": [
+        578.0,
+        307.0,
+        123.0,
+        142.0
+      ],
+      "area": 17466.0,
+      "iscrowd": 0,
+      "segmentation": []
+    }
+  ]
+}

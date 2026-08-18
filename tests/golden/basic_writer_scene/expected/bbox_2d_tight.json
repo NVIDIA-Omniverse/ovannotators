@@ -1,0 +1,57 @@
+[
+  {
+    "x_min": 0.0,
+    "y_min": 0.0,
+    "x_max": 1279.0,
+    "y_max": 719.0,
+    "semantic_id": 2,
+    "instance_id": 3319052530,
+    "label": "plane",
+    "occlusion_ratio": 0.0,
+    "prim_path": null
+  },
+  {
+    "x_min": 767.0,
+    "y_min": 272.0,
+    "x_max": 951.0,
+    "y_max": 437.0,
+    "semantic_id": 3,
+    "instance_id": 1378685019,
+    "label": "cube",
+    "occlusion_ratio": 0.0,
+    "prim_path": "/Replicator/Cube_Xform/Cube"
+  },
+  {
+    "x_min": 783.0,
+    "y_min": 130.0,
+    "x_max": 977.0,
+    "y_max": 324.0,
+    "semantic_id": 3,
+    "instance_id": 2399567550,
+    "label": "cube",
+    "occlusion_ratio": 0.0,
+    "prim_path": "/Replicator/Cube_Xform_01/Cube"
+  },
+  {
+    "x_min": 361.0,
+    "y_min": 196.0,
+    "x_max": 485.0,
+    "y_max": 320.0,
+    "semantic_id": 4,
+    "instance_id": 3826580222,
+    "label": "sphere",
+    "occlusion_ratio": 0.0,
+    "prim_path": "/Replicator/Sphere_Xform/Sphere"
+  },
+  {
+    "x_min": 578.0,
+    "y_min": 307.0,
+    "x_max": 701.0,
+    "y_max": 449.0,
+    "semantic_id": 5,
+    "instance_id": 2862958192,
+    "label": "cone",
+    "occlusion_ratio": 0.0,
+    "prim_path": "/Replicator/Cone_Xform/Cone"
+  }
+]

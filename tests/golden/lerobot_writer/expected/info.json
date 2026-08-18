@@ -1,0 +1,71 @@
+{
+  "chunks_shape": [
+    1,
+    1000
+  ],
+  "codebase_version": "v2.0",
+  "dataset_type": "LeRobotDataset",
+  "features": {
+    "episode_index": {
+      "dtype": "int64",
+      "names": null,
+      "shape": [
+        1
+      ]
+    },
+    "frame_index": {
+      "dtype": "int64",
+      "names": null,
+      "shape": [
+        1
+      ]
+    },
+    "index": {
+      "dtype": "int64",
+      "names": null,
+      "shape": [
+        1
+      ]
+    },
+    "observation.images.top": {
+      "dtype": "video",
+      "names": [
+        "height",
+        "width",
+        "channel"
+      ],
+      "shape": [
+        720,
+        1280,
+        3
+      ],
+      "video_info": {
+        "has_audio": false,
+        "video.codec": "h264",
+        "video.fps": 30,
+        "video.is_depth_map": false,
+        "video.pix_fmt": "yuv420p"
+      }
+    },
+    "task_index": {
+      "dtype": "int64",
+      "names": null,
+      "shape": [
+        1
+      ]
+    },
+    "timestamp": {
+      "dtype": "float64",
+      "names": null,
+      "shape": [
+        1
+      ]
+    }
+  },
+  "fps": 30,
+  "robot_type": "synthetic",
+  "total_episodes": 1,
+  "total_frames": 1,
+  "total_tasks": 1,
+  "total_videos": 1
+}

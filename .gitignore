@@ -1,0 +1,27 @@
+**/__pycache__/
+.DS_Store
+.coverage
+*.egg-info/
+build/
+dist/
+docs/_build/
+docs/public/_build/
+docs/_build/
+_*/
+
+# Underscore-prefixed dirs above are scratch/build artifacts, but the
+# ``_internal`` package is real, importable source and must be tracked/packaged.
+# Re-include only its Python sources (keep __pycache__ etc. ignored).
+!source/ovannotators/_internal/
+!source/ovannotators/_internal/*.py
+
+# Sphinx static assets live under an underscore-prefixed dir but are real
+# source (e.g. docs media embedded in the tutorials) and must be tracked.
+!docs/public/_static/
+!docs/public/_static/**
+
+# Cloned reference repos (NVIDIA Cosmos / Cosmos Framework) for transfer integration
+external/
+
+# Ignore warp cache
+.warpcache/
