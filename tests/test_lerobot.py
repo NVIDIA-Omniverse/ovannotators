@@ -109,7 +109,7 @@ class TestLeRobotWriteFrame:
         img = np.random.randint(0, 255, (64, 64, 4), dtype=np.uint8)
         cam = np.zeros(25, dtype=np.float64)
         writer.write_frame(0, {"LdrColor": img, "CameraParams": cam}, backend)
-        stored = writer._frame_images["top"][0]
+        stored = writer._frames[0]
         assert stored.shape == (64, 64, 3)
 
     def test_float_to_uint8(self):
@@ -118,7 +118,7 @@ class TestLeRobotWriteFrame:
         img = np.random.uniform(0, 1, (64, 64, 3)).astype(np.float32)
         cam = np.zeros(25, dtype=np.float64)
         writer.write_frame(0, {"LdrColor": img, "CameraParams": cam}, backend)
-        stored = writer._frame_images["top"][0]
+        stored = writer._frames[0]
         assert stored.dtype == np.uint8
 
     def test_grayscale_to_3ch(self):
@@ -127,7 +127,7 @@ class TestLeRobotWriteFrame:
         img = np.random.randint(0, 255, (64, 64), dtype=np.uint8)
         cam = np.zeros(25, dtype=np.float64)
         writer.write_frame(0, {"LdrColor": img, "CameraParams": cam}, backend)
-        stored = writer._frame_images["top"][0]
+        stored = writer._frames[0]
         assert stored.shape == (64, 64, 3)
 
 
@@ -136,7 +136,7 @@ class TestLeRobotWriteFrame:
 # ---------------------------------------------------------------------------
 
 
-def _mock_encode_video(frames, fps):
+def _mock_encode_video(frames, fps, **kwargs):
     """Mock video encoder for unit tests (NVENC needs >64px)."""
     return b"\x00\x00\x00\x1c" + b"ftypisom" + b"\x00" * 100  # fake MP4
 
@@ -225,11 +225,29 @@ class TestLeRobotFinalize:
         writer, backend = self._make_writer_with_frames(
             3, camera_keys=["front", "wrist"]
         )
-        writer.finalize(backend)
+        with patch(
+            "ovannotators.writers.lerobot._encode_video",
+            side_effect=_mock_encode_video,
+        ) as encode:
+            writer.finalize(backend)
         video_keys = [k for k in backend.written if k.endswith(".mp4")]
         assert len(video_keys) == 2
         assert any("front" in k for k in video_keys)
         assert any("wrist" in k for k in video_keys)
+        # One stream feeds every camera key, so each chunk is encoded once.
+        encode.assert_called_once()
+
+    def test_finalize_without_camera_keys_skips_video(self):
+        writer, backend = self._make_writer_with_frames(3, camera_keys=[])
+        with patch(
+            "ovannotators.writers.lerobot._encode_video",
+            side_effect=_mock_encode_video,
+        ) as encode:
+            writer.finalize(backend)
+        encode.assert_not_called()
+        assert writer._frames == []
+        assert not [k for k in backend.written if k.endswith(".mp4")]
+        assert any(k.endswith(".parquet") for k in backend.written)
 
     def test_finalize_multiple_chunks(self):
         cfg = LeRobotWriterConfig(

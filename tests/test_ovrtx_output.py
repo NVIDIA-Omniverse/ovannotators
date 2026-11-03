@@ -21,6 +21,7 @@ import re
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -30,7 +31,7 @@ from ovannotators.exceptions import ExtractionError, ValidationError
 from ovannotators.renderer_outputs.ovrtx import OvrtxOutput
 
 try:
-    import ovrtx
+    import ovrtx  # noqa: F401  # availability probe for _HAS_OVRTX
 
     _HAS_OVRTX = True
 except ImportError:
@@ -42,6 +43,43 @@ class _MockDevice(Enum):
 
     CPU = "cpu"
     CUDA = "cuda"
+
+
+class _FakeRenderVar:
+    """A single-tensor ovrtx 0.5 ``RenderVarOutput``.
+
+    Records the device it was mapped with so a test can assert *which* prim a
+    lookup resolved to when several share a ``source_name``.
+    """
+
+    def __init__(self, source_name: str) -> None:
+        self.source_name = source_name
+        self.mapped_with: object | None = None
+
+    @contextmanager
+    def map(self, device: object):
+        self.mapped_with = device
+        mapping = MagicMock()
+        mapping.__len__.return_value = 1
+        mapping.params = {}
+        yield mapping
+
+
+def _frame_with(*render_var_paths: str) -> MagicMock:
+    """Build a frame whose ``render_vars`` is keyed by prim path, as 0.5 is.
+
+    Args:
+        *render_var_paths: Full RenderVar prim paths. Each one's last path
+            component becomes the var's ``source_name``.
+
+    Returns:
+        A mock ovrtx ``FrameOutput``.
+    """
+    frame = MagicMock()
+    frame.render_vars = {
+        path: _FakeRenderVar(path.rsplit("/", 1)[-1]) for path in render_var_paths
+    }
+    return frame
 
 
 class TestOvrtxOutput:
@@ -349,16 +387,59 @@ class TestOvrtxOutput:
                 out.extract_all(mock_frame, ["bad"])
 
     def test_available_vars(self):
+        """ovrtx 0.5 keys render_vars by prim path; we report the sourceName."""
         out = OvrtxOutput()
-        mock_frame = MagicMock()
-        mock_frame.render_vars.keys.return_value = [
-            "LdrColor",
-            "DistanceToCameraSD",
-            "NormalSD",
-        ]
+        mock_frame = _frame_with(
+            "/Render/Camera/LdrColor",
+            "/Render/Camera/DistanceToCameraSD",
+            "/Render/Camera/NormalSD",
+        )
 
         result = out.available_vars(mock_frame)
         assert set(result) == {"LdrColor", "DistanceToCameraSD", "NormalSD"}
+
+    def test_available_vars_falls_back_to_key_without_source_name(self):
+        """Reserved ovrtx outputs carry no sourceName, so the key is the name."""
+        out = OvrtxOutput()
+        mock_frame = MagicMock()
+        mock_frame.render_vars = {"debug": SimpleNamespace(source_name="")}
+
+        assert out.available_vars(mock_frame) == ["debug"]
+
+    def test_available_vars_reports_a_duplicated_source_name_once(self):
+        out = OvrtxOutput()
+        mock_frame = _frame_with(
+            "/Render/A/LdrColor", "/Render/B/LdrColor", "/Render/A/NormalSD"
+        )
+
+        assert out.available_vars(mock_frame) == ["LdrColor", "NormalSD"]
+
+    @patch("ovannotators.renderer_outputs.ovrtx.Device", _MockDevice)
+    @patch("ovannotators.renderer_outputs.ovrtx._OVRTX_AVAILABLE", True)
+    def test_extract_resolves_source_name_to_prim_path(self):
+        """A sourceName resolves even though render_vars is keyed by path."""
+        out = OvrtxOutput()
+        mock_frame = _frame_with("/Render/Camera/LdrColor")
+        wanted = mock_frame.render_vars["/Render/Camera/LdrColor"]
+
+        with patch("ovannotators.renderer_outputs.ovrtx.wp") as mock_wp:
+            mock_wp.from_dlpack.return_value = "view"
+            assert out.extract(mock_frame, "LdrColor", device="cpu") == "view"
+        assert wanted.mapped_with == _MockDevice.CPU
+
+    @patch("ovannotators.renderer_outputs.ovrtx.Device", _MockDevice)
+    @patch("ovannotators.renderer_outputs.ovrtx._OVRTX_AVAILABLE", True)
+    def test_extract_accepts_a_full_prim_path(self):
+        """A full path selects one of two prims sharing a sourceName."""
+        out = OvrtxOutput()
+        mock_frame = _frame_with("/Render/A/LdrColor", "/Render/B/LdrColor")
+
+        with patch("ovannotators.renderer_outputs.ovrtx.wp") as mock_wp:
+            mock_wp.from_dlpack.return_value = "view"
+            out.extract(mock_frame, "/Render/B/LdrColor", device="cpu")
+
+        assert mock_frame.render_vars["/Render/B/LdrColor"].mapped_with is not None
+        assert mock_frame.render_vars["/Render/A/LdrColor"].mapped_with is None
 
     def test_extract_ovrtx_not_installed(self):
         """Test import error path when ovrtx is not available."""
@@ -377,13 +458,20 @@ class TestOvrtxOutputIntegration:
     _RENDER_PRODUCT = "/Render/RenderProduct_001"
 
     def test_extract_ldr_color_from_real_frame_cpu(self):
-        renderer = ovrtx.Renderer()
-        renderer.open_usd(str(self._SCENE_PATH.resolve()))
-        outputs = renderer.step({self._RENDER_PRODUCT}, 1.0 / 60.0)
-        frame = outputs[self._RENDER_PRODUCT].frames[0]
+        from tests._ovstage_session import OvstageSession
 
-        extracted = OvrtxOutput().extract(frame, "LdrColor", device="cpu")
-        array = extracted.numpy() if hasattr(extracted, "numpy") else extracted
+        with OvstageSession("ovrtx-output-integration") as session:
+            session.open_usd(self._SCENE_PATH.resolve())
+            outputs = session.step({self._RENDER_PRODUCT}, 1.0 / 60.0)
+            frame = outputs[self._RENDER_PRODUCT].frames[0]
+
+            extracted = OvrtxOutput().extract(frame, "LdrColor", device="cpu")
+            # Copy to owned host memory and drop every view that keeps the
+            # render-var mapping alive, so the session tears down cleanly.
+            array = np.array(
+                extracted.numpy() if hasattr(extracted, "numpy") else extracted
+            )
+            del extracted, frame, outputs
 
         match = re.search(
             r"uniform int2 resolution = \((\d+),\s*(\d+)\)",
@@ -454,6 +542,28 @@ class TestOvrtxExtractDecodeAndErrors:
         ):
             mock_wp.from_dlpack.return_value = sentinel
             result = out.extract(mock_frame, "CameraParams", device="cpu", decode=True)
+
+        assert result == ("decoded", sentinel)
+
+    @patch("ovannotators.renderer_outputs.ovrtx.Device", _MockDevice)
+    @patch("ovannotators.renderer_outputs.ovrtx._OVRTX_AVAILABLE", True)
+    def test_extract_by_full_path_decodes_annotator_var(self):
+        """A full RenderVar path still selects the sourceName decoder."""
+        out = OvrtxOutput()
+        mock_frame = _frame_with("/Render/A/CameraParams")
+        sentinel = object()
+
+        with (
+            patch("ovannotators.renderer_outputs.ovrtx.wp") as mock_wp,
+            patch(
+                "ovannotators.renderer_outputs.ovrtx._annotator_decoders",
+                return_value={"CameraParams": lambda result: ("decoded", result)},
+            ),
+        ):
+            mock_wp.from_dlpack.return_value = sentinel
+            result = out.extract(
+                mock_frame, "/Render/A/CameraParams", device="cpu", decode=True
+            )
 
         assert result == ("decoded", sentinel)
 

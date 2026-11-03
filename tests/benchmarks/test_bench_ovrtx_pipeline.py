@@ -82,19 +82,20 @@ DELTA_TIME = 1.0 / 60.0
 def renderer():
     """Open the test scene and settle the path tracer once for the module."""
     pytest.importorskip("ovrtx")
-    import ovrtx
+    pytest.importorskip("ovstage")
+    from tests._ovstage_session import OvstageSession
 
-    r = ovrtx.Renderer()
-    r.open_usd(str(SCENE_PATH.resolve()))
+    session = OvstageSession("bench-ovrtx-pipeline")
+    session.open_usd(SCENE_PATH.resolve())
     for _ in range(WARMUP_STEPS):
-        r.step({RENDER_PRODUCT}, DELTA_TIME)
+        session.step({RENDER_PRODUCT}, DELTA_TIME)
     try:
-        yield r
+        yield session
     finally:
         # Destroy the renderer deterministically while the interpreter is fully
         # alive instead of leaving it to shutdown GC (which can race ovrtx/omni
         # teardown and hang).
-        del r
+        session.close()
 
 
 def _capture_serial(renderer, extractor, writer, backend) -> int:

@@ -1,0 +1,36 @@
+{
+  "codebase_version": "v2.1",
+  "feature_names": {
+    "action": [
+      "joint.target",
+      "gripper.target"
+    ],
+    "observation.images.front": [
+      "height",
+      "width",
+      "channels"
+    ],
+    "observation.state": [
+      "joint.position",
+      "gripper.position"
+    ]
+  },
+  "groot_release": {
+    "commit": "23ace64f17aa5015259b8609d371eb61a357c776",
+    "tag": "n1.7-release"
+  },
+  "required_paths": [
+    "data/chunk-000/episode_000000.parquet",
+    "data/chunk-001/episode_000001.parquet",
+    "data/chunk-002/episode_000002.parquet",
+    "meta/episodes.jsonl",
+    "meta/info.json",
+    "meta/modality.json",
+    "meta/relative_stats.json",
+    "meta/stats.json",
+    "meta/tasks.jsonl",
+    "videos/chunk-000/observation.images.front/episode_000000.mp4",
+    "videos/chunk-000/observation.images.wrist/episode_000000.mp4",
+    "_ovannotators/_SUCCESS"
+  ]
+}

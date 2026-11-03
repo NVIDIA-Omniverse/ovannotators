@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+"""backends — pluggable write/read destinations."""
+
+from __future__ import annotations
+
+from ovannotators.backends._base import Backend
+from ovannotators.backends._registry import BackendRegistry
+from ovannotators.backends.disk import DiskBackend, DiskBackendConfig
+from ovannotators.backends.s3 import S3Backend, S3BackendConfig
+from ovannotators.backends.ovstorage import OvstorageBackend, OvstorageBackendConfig
+
+from ovannotators.backends.webdataset import (
+    SampleFiles,
+    WebDatasetPackager,
+    WebDatasetPackagerConfig,
+)
+
+__all__ = [
+    "SampleFiles",
+    "WebDatasetPackager",
+    "WebDatasetPackagerConfig",
+    "Backend",
+    "DiskBackend",
+    "DiskBackendConfig",
+    "S3Backend",
+    "S3BackendConfig",
+    "OvstorageBackend",
+    "OvstorageBackendConfig",
+    "BackendRegistry",
+]

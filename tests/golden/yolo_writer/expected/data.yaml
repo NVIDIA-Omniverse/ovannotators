@@ -1,4 +1,4 @@
 train: images/train
 val: images/val
 nc: 4
-names: ['plane', 'cube', 'sphere', 'cone']
+names: ['sphere', 'cone', 'cube', 'plane']

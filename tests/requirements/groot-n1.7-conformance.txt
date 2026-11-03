@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Isaac-GR00T N1.7 requires Python 3.10 and ovannotators requires 3.11+, so this
+# pin cannot share an interpreter with ovannotators. The conformance test in
+# tests/test_groot_lerobot_v2_loader.py imports both and skips until it is split
+# into a writer step and a separate Python 3.10/GPU reader step. The immutable
+# commit is the source of truth for the tag.
+gr00t @ git+https://github.com/NVIDIA/Isaac-GR00T.git@23ace64f17aa5015259b8609d371eb61a357c776

@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 class _EncodeOnlyBackend:
     """Backend stub that encodes image arrays with a fixed codec, no I/O.
 
-    Faithfully mirrors what the real disk/S3/HTTP backends do for image
+    Faithfully mirrors what the real disk/S3/ovstorage backends do for image
     encodings (``buf.write(get_image_codec().encode(...))``) but discards the
     result, so the benchmark isolates encode (and writer) cost from disk and
     network variance. Non-image encodings are no-ops since these benchmarks only
@@ -142,7 +142,12 @@ class TestImageEncode:
         encoded = codec.encode(frame, format=image_format)
         assert isinstance(encoded, (bytes, bytearray)) and len(encoded) > 0
 
-        result = benchmark(codec.encode, frame, image_format)
+        result = benchmark.pedantic(
+            codec.encode,
+            args=(frame, image_format),
+            rounds=10,
+            iterations=1,
+        )
         assert len(result) > 0
 
 
@@ -173,4 +178,9 @@ class TestBasicWriterImageWrite:
         # Warm up the codec/encoder once outside the timed region.
         writer.write_frame(0, render_vars, backend)
 
-        benchmark(writer.write_frame, 0, render_vars, backend)
+        benchmark.pedantic(
+            writer.write_frame,
+            args=(0, render_vars, backend),
+            rounds=10,
+            iterations=1,
+        )

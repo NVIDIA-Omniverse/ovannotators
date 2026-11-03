@@ -234,10 +234,23 @@ class TestNvVideoEncoder:
         result = enc.close()
         assert result == b""
 
-    def test_open_and_close_muxes_to_mp4(self):
+    @pytest.mark.parametrize("packet_format", ["bytes", "mapping", "sequence"])
+    def test_open_and_close_muxes_to_mp4(self, packet_format):
         mock_pynv = MagicMock()
         mock_encoder_inst = MagicMock()
         mock_encoder_inst.Encode.return_value = _FAKE_ANNEXB
+        if packet_format == "mapping":
+            mock_encoder_inst.Encode.return_value = [
+                {"data": memoryview(_FAKE_ANNEXB[:12]), "timestamp": 0},
+                {"data": b"", "timestamp": 0},
+                {"data": _FAKE_ANNEXB[12:], "timestamp": 0},
+            ]
+        elif packet_format == "sequence":
+            mock_encoder_inst.Encode.return_value = [
+                bytearray(_FAKE_ANNEXB[:12]),
+                b"",
+                memoryview(_FAKE_ANNEXB[12:]),
+            ]
         mock_encoder_inst.EndEncode.return_value = b""
         mock_pynv.CreateEncoder.return_value = mock_encoder_inst
 
@@ -256,7 +269,7 @@ class TestNvVideoEncoder:
         assert b"moov" in result
         assert b"mdat" in result
 
-    def test_close_flush_exception_handled(self):
+    def test_close_flush_exception_propagates(self):
         mock_pynv = MagicMock()
         mock_encoder_inst = MagicMock()
         mock_encoder_inst.Encode.return_value = _FAKE_ANNEXB
@@ -267,9 +280,14 @@ class TestNvVideoEncoder:
             enc = NvVideoEncoder()
             enc.open("", 30, 64, 64)
             enc.write_frame(np.zeros((64, 64, 3), dtype=np.uint8))
-            # Should not raise — flush errors are caught
-            result = enc.close()
-            assert result[4:8] == b"ftyp"
+            # A failed flush must never yield a silently truncated MP4.
+            with pytest.raises(RuntimeError, match="flush error"):
+                enc.close()
+            # The encoder is closed and drops its partial stream either way.
+            assert enc._encoder is None
+            assert not enc._opened
+            assert enc._chunks == []
+            assert enc.close() == b""
 
     def test_close_muxes_raw_h264_payload(self):
         enc = NvVideoEncoder()
@@ -297,6 +315,99 @@ class TestNvVideoEncoder:
 
 
 class TestExrReadWrite:
+    @pytest.mark.parametrize(
+        "scheme",
+        [
+            "none",
+            "rle",
+            "zips",
+            "zip",
+            "piz",
+            "pxr24",
+            "b44",
+            "b44a",
+            "dwaa",
+            "dwab",
+            "htj2k256",
+            "htj2k32",
+        ],
+    )
+    def test_exr_compression_scheme_is_written(self, tmp_path, scheme):
+        """Every advertised scheme is recorded in a readable EXR header."""
+        import Imath
+        import OpenEXR
+
+        from ovannotators._internal.codecs import _encode_exr_bytes
+
+        expected = (
+            "NO_COMPRESSION" if scheme == "none" else f"{scheme.upper()}_COMPRESSION"
+        )
+        if not hasattr(Imath.Compression, expected):
+            pytest.skip(f"installed OpenEXR lacks {scheme} compression")
+        payload = _encode_exr_bytes(
+            np.ones((64, 64, 1), np.float16), compression=scheme
+        )
+        path = tmp_path / "compressed.exr"
+        path.write_bytes(payload)
+        inp = OpenEXR.InputFile(str(path))
+        assert inp.header()["compression"] == Imath.Compression(
+            getattr(Imath.Compression, expected)
+        )
+        assert (
+            len(inp.channel("R", Imath.PixelType(Imath.PixelType.HALF))) == 64 * 64 * 2
+        )
+        inp.close()
+
+    @pytest.mark.parametrize(
+        "scheme", ["none", "rle", "zips", "zip", "piz", "htj2k256", "htj2k32"]
+    )
+    @pytest.mark.parametrize(
+        "array",
+        [
+            np.array([[[3.4028235e38, 1.0e12, 1.25]]], dtype=np.float32),
+            np.array([[[2**24 + 1, 2**32 - 1, 7]]], dtype=np.uint32),
+        ],
+        ids=["float32", "uint32"],
+    )
+    def test_lossless_scheme_roundtrips_float32_and_uint32(
+        self, tmp_path, scheme, array
+    ):
+        """Lossless schemes keep float32 and uint32 channels bit-exact."""
+        import Imath
+
+        from ovannotators._internal.codecs import _write_exr_file, read_exr
+
+        constant = (
+            "NO_COMPRESSION" if scheme == "none" else f"{scheme.upper()}_COMPRESSION"
+        )
+        if not hasattr(Imath.Compression, constant):
+            pytest.skip(f"installed OpenEXR lacks {scheme} compression")
+        path = str(tmp_path / "exact.exr")
+        _write_exr_file(path, array, compression=scheme)
+        result = read_exr(path)
+        assert result.dtype == array.dtype
+        np.testing.assert_array_equal(result, array)
+
+    def test_exr_compression_default_and_invalid_name(self, tmp_path):
+        """Default stays ZIP and unknown names fail before a file is written."""
+        import Imath
+        import OpenEXR
+
+        from ovannotators._internal.codecs import _encode_exr_bytes
+
+        array = np.ones((4, 4, 1), np.float16)
+        path = tmp_path / "default.exr"
+        path.write_bytes(_encode_exr_bytes(array))
+        inp = OpenEXR.InputFile(str(path))
+        assert inp.header()["compression"] == Imath.Compression(
+            Imath.Compression.ZIP_COMPRESSION
+        )
+        inp.close()
+        with pytest.raises(ValueError, match="Unsupported EXR compression"):
+            _encode_exr_bytes(array, compression="unknown")
+        with pytest.raises(TypeError, match="must be a string"):
+            _encode_exr_bytes(array, compression=123)
+
     def test_write_read_roundtrip_rgb(self, tmp_path):
         """Float16 RGB roundtrip through EXR."""
         from ovannotators._internal.codecs import _write_exr, read_exr
@@ -320,15 +431,83 @@ class TestExrReadWrite:
         assert result.shape == (16, 16, 4)
         np.testing.assert_array_equal(arr, result)
 
-    def test_write_exr_converts_float32_to_half(self, tmp_path):
-        """Float32 input is converted to float16 for EXR storage."""
+    def test_write_exr_preserves_float32_range(self, tmp_path):
+        """Depth sentinels and large positions must not overflow to half."""
         from ovannotators._internal.codecs import _write_exr, read_exr
 
-        arr = np.random.rand(8, 8, 3).astype(np.float32)
+        arr = np.array([[[3.4028235e38, 1.0e12, 1.25]]], dtype=np.float32)
         path = str(tmp_path / "test.exr")
         _write_exr(path, arr)
         result = read_exr(path)
-        assert result.dtype == np.float16
+        assert result.dtype == np.float32
+        np.testing.assert_array_equal(result, arr)
+
+    def test_write_exr_preserves_uint32_ids(self, tmp_path):
+        """EXR UINT channels keep IDs that float32 cannot represent exactly."""
+        from ovannotators._internal.codecs import _write_exr, read_exr
+
+        arr = np.array([[[2**24 + 1, 2**32 - 1]]], dtype=np.uint32)
+        path = str(tmp_path / "ids.exr")
+        _write_exr(path, arr)
+        result = read_exr(path)
+        assert result.dtype == np.uint32
+        np.testing.assert_array_equal(result, arr)
+
+    def test_write_exr_rejects_lossy_dtype_conversion(self, tmp_path):
+        """Unsupported types must not silently lose precision or sign."""
+        from ovannotators._internal.codecs import _write_exr
+
+        for dtype in (np.float64, np.int32, np.uint64):
+            with pytest.raises(TypeError, match="EXR write supports"):
+                _write_exr(str(tmp_path / "bad.exr"), np.ones((2, 2), dtype=dtype))
+
+    def test_write_exr_rejects_bool(self, tmp_path):
+        """Boolean masks are not silently cast to half."""
+        from ovannotators._internal.codecs import _write_exr
+
+        with pytest.raises(TypeError, match="EXR write supports"):
+            _write_exr(str(tmp_path / "bad.exr"), np.ones((2, 2), dtype=np.bool_))
+
+    @pytest.mark.parametrize("dtype", [np.uint8, np.uint16])
+    def test_write_exr_promotes_small_unsigned_ints_to_uint32(self, tmp_path, dtype):
+        """uint8/uint16 values are stored exactly as uint32 channels."""
+        from ovannotators._internal.codecs import (
+            _normalize_exr_array,
+            _write_exr,
+            read_exr,
+        )
+
+        arr = np.array([[[0, 1, np.iinfo(dtype).max]]], dtype=dtype)
+        assert _normalize_exr_array(arr).dtype == np.uint32
+        path = str(tmp_path / "small_ints.exr")
+        _write_exr(path, arr)
+        result = read_exr(path)
+        assert result.dtype == np.uint32
+        np.testing.assert_array_equal(result, arr.astype(np.uint32))
+
+    def test_read_exr_rejects_mixed_channel_types(self, tmp_path):
+        """A file whose channels differ in pixel type cannot be stacked."""
+        import Imath
+        import OpenEXR
+
+        from ovannotators._internal.codecs import read_exr
+
+        path = str(tmp_path / "mixed.exr")
+        header = OpenEXR.Header(2, 2)
+        header["channels"] = {
+            "R": Imath.Channel(Imath.PixelType(Imath.PixelType.HALF)),
+            "G": Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
+        }
+        out = OpenEXR.OutputFile(path, header)
+        out.writePixels(
+            {
+                "R": np.zeros((2, 2), dtype=np.float16).tobytes(),
+                "G": np.zeros((2, 2), dtype=np.float32).tobytes(),
+            }
+        )
+        out.close()
+        with pytest.raises(ValueError, match="same pixel type"):
+            read_exr(path)
 
     def test_write_read_roundtrip_single_channel(self, tmp_path):
         """Single-channel (H, W, 1) data roundtrips through EXR."""
@@ -413,8 +592,9 @@ class TestGetImageCodec:
 class TestGetVideoEncoder:
     def test_without_pynvvideocodec_raises(self):
         with patch.dict("sys.modules", {"PyNvVideoCodec": None}):
-            with pytest.raises(ImportError):
+            with pytest.raises(ImportError) as excinfo:
                 get_video_encoder("", 30, 64, 64)
+        assert "PyNvVideoCodec" in str(excinfo.value)
 
     def test_with_pynvvideocodec(self):
         mock_pynv = MagicMock()
@@ -734,3 +914,24 @@ def test_gpu_image_codec_unavailable_when_warp_probe_raises():
         from ovannotators._internal.codecs import _gpu_image_codec_available
 
         assert _gpu_image_codec_available() is False
+
+
+@pytest.mark.parametrize("cuda_device_count", [0, 1])
+@pytest.mark.parametrize("bindings_available", [False, True])
+def test_image_codec_selection_requires_cuda_and_bindings(
+    monkeypatch, cuda_device_count, bindings_available
+):
+    import warp as wp
+    from ovannotators._internal import optional_deps
+    from ovannotators._internal.codecs import get_image_codec
+
+    monkeypatch.setattr(wp, "get_cuda_device_count", lambda: cuda_device_count)
+    monkeypatch.setattr(
+        optional_deps, "nvimgcodec_available", lambda: bindings_available
+    )
+    expected = (
+        NvImageCodecBackend
+        if cuda_device_count > 0 and bindings_available
+        else PillowCodecBackend
+    )
+    assert isinstance(get_image_codec(), expected)

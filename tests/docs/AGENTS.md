@@ -88,6 +88,14 @@ uv run pytest -q
 reference under `skills/` resolves to a real snippet marker here, and that the
 `.agents/skills` and `.claude/skills` mirrors point at `skills/`.
 
+`tests/test_doc_code_blocks.py` checks every Python block in `docs/public` as a
+reader sees it, including the snippet regions included from here. A block must
+parse, pass ruff's unused-import, unused-variable, and redefinition rules, use
+only public `ovannotators` imports, and name any undefined variable (such as a
+fixture-backed `output_dir`) as an inline literal in its section's prose.
+Variables that a snippet assigns only for asserts placed after its end marker
+count as unused: use them in the snippet or move the assignment out.
+
 ## Current Snippet Inventory
 
 **Agents MUST keep this table up to date.** When you add, rename, move, or
@@ -105,3 +113,20 @@ remove a snippet, update this table in the same change.
 | `doc-backend-test` | `python/test_custom_backend.py` | `new-backend` |
 | `doc-config-save-load` | `python/test_config_serialization.py` | `new-writer`, `new-backend` |
 | `doc-config-registry` | `python/test_config_serialization.py` | `new-writer`, `new-backend` |
+| `doc-lossless-video` | `python/test_lossless_video.py` | Video tutorial |
+| `doc-profile-writer-class` | `python/test_profile_writer.py` | `new-writer` |
+| `doc-profile-writer-lifecycle` | `python/test_profile_writer.py` | `new-writer` |
+| `doc-webdataset-capture` | `python/test_webdataset.py` | `new-backend`, `new-writer` |
+| `doc-webdataset-pack-files` | `python/test_webdataset.py` | `new-backend` |
+| `doc-webdataset-custom-adapter` | `python/test_webdataset.py` | `new-writer` |
+| `doc-webdataset-clip-adapter` | `python/test_webdataset.py` | `new-writer`, API reference, public tutorial |
+| `doc-webdataset-export-finalized` | `python/test_webdataset.py` | public tutorial |
+| `doc-webdataset-read` | `python/test_webdataset.py` | public tutorial |
+| `doc-dataset-requirements` | `python/test_requirements.py` | `new-writer` |
+| `doc-depth-requirements` | `python/test_requirements.py` | `new-writer` |
+| `doc-webdataset-basic-video` | `python/test_webdataset.py` | API reference, public tutorial |
+
+| `doc-webdataset-kitti` | `python/test_webdataset.py` | public tutorial |
+| `doc-webdataset-bop-capture` | `python/test_webdataset_bop.py` | public tutorial |
+| `doc-webdataset-bop-read` | `python/test_webdataset_bop.py` | public tutorial |
+| `doc-webdataset-yolo-split-filter` | `python/test_webdataset.py` | public tutorial |

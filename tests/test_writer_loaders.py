@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -68,7 +69,11 @@ LOADERS_DIR = Path(__file__).parent / "dataset_loaders"
 
 # pynvvideocodec ships the NVENC shared libs the lerobot loader's PyAV decode
 # path needs on its LD_LIBRARY_PATH.
-_PYNVVIDEOCODEC_LIB = "/home/horde/.local/lib/python3.10/site-packages/pynvvideocodec"
+_PYNVVIDEOCODEC_LIB = (
+    "/home/horde/.local/lib/"
+    f"python{sys.version_info.major}.{sys.version_info.minor}"
+    "/site-packages/pynvvideocodec"
+)
 
 
 def _has_functional_nvvideocodec() -> bool:

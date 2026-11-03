@@ -22,6 +22,7 @@ bounding-box and camera vars use the structured ovrtx payload dtypes from
 
 from __future__ import annotations
 
+import io
 import json
 from typing import Any
 
@@ -337,6 +338,57 @@ def test_basic_writer_accepts_warp_array_inputs() -> None:
     assert backend.exists("0000/distance_to_camera_colorized.png")
 
 
+class _HostReadbackCounter:
+    """Device-array stand-in that counts host readbacks via ``numpy()``."""
+
+    def __init__(self, host: np.ndarray) -> None:
+        self._host = host
+        self.shape = host.shape
+        self.readbacks = 0
+
+    def numpy(self) -> np.ndarray:
+        self.readbacks += 1
+        return self._host
+
+
+@pytest.mark.parametrize(
+    ("var_name", "host", "expected_keys"),
+    [
+        (
+            "DistanceToCameraSD",
+            np.linspace(0.5, 4.0, 64, dtype=np.float32).reshape(8, 8),
+            {"0000/distance_to_camera.exr", "0000/distance_to_camera_colorized.png"},
+        ),
+        (
+            "NormalSD",
+            np.full((8, 8, 3), 0.5, dtype=np.float32),
+            {"0000/normal.exr", "0000/normal_colorized.png"},
+        ),
+    ],
+)
+def test_basic_writer_reads_colorizable_var_back_once(
+    var_name, host, expected_keys
+) -> None:
+    """A colorized var is read back from the device once and output is unchanged."""
+    from_device = _HostReadbackCounter(host)
+    device_backend = MockBackend()
+    BasicWriter(BasicWriterConfig(colorize=True)).write_frame(
+        0, {var_name: from_device}, device_backend
+    )
+    assert from_device.readbacks == 1
+
+    host_backend = MockBackend()
+    BasicWriter(BasicWriterConfig(colorize=True)).write_frame(
+        0, {var_name: host}, host_backend
+    )
+    assert expected_keys <= set(device_backend.written)
+    assert set(device_backend.written) == set(host_backend.written)
+    for path, (array, encoding) in device_backend.written.items():
+        host_array, host_encoding = host_backend.written[path]
+        assert encoding == host_encoding
+        np.testing.assert_array_equal(array, host_array)
+
+
 def test_basic_writer_frame_dir_zero_padded(sample_render_vars) -> None:
     backend = MockBackend()
     BasicWriter(BasicWriterConfig(frame_id_digits=4)).write_frame(
@@ -564,17 +616,98 @@ def test_basic_writer_exports_runtime_verified_ovrtx_additions() -> None:
     assert backend.exists("0000/target_motion.exr")
     assert backend.exists("0000/non_stable_instance_segmentation.npy")
     assert backend.exists("0000/stable_id_segmentation.npy")
-    assert backend.exists("0000/semantic_id_map.json")
-    assert backend.exists("0000/stable_id_map.json")
-    assert backend.exists("0000/stable_id_semantic_id_map.json")
-    assert backend.exists("0000/instance_map.json")
+
+    # Content, not just existence: a byte-dump of the raw buffer would also
+    # satisfy exists().
+    assert _read_json(backend, "0000/semantic_id_map.json") == {"7": "class: robot;"}
+    assert _read_json(backend, "0000/stable_id_map.json") == {"101": "/World/Robot"}
+    assert _read_json(backend, "0000/stable_id_semantic_id_map.json") == [
+        {"stable_id": [0, 0, 0, 0], "semantic_id": [0, 0, 0, 0]}
+    ]
+    assert _read_json(backend, "0000/instance_map.json") == [
+        {"instance_index": 0, "stable_semantic_index": 0},
+        {"instance_index": 1, "stable_semantic_index": 0xFFFFFFFF},
+    ]
 
 
-def test_basic_writer_generic_model_output_stored_as_npz() -> None:
+def _read_json(backend, path: str):
+    """Decode a JSON artifact written to ``backend``."""
+    raw = backend.written[path]
+    return json.loads(raw.decode() if isinstance(raw, (bytes, bytearray)) else raw)
+
+
+def test_basic_writer_exports_raw_ovrtx_buffers_decoded() -> None:
+    """Undecoded ovrtx buffers are decoded, not dumped as byte lists.
+
+    ``OvrtxOutput.extract(decode=False)`` (and any non-ovrtx producer) hands the
+    writer raw payloads. Those must land as the same JSON the decoded form
+    produces, rather than as a list of uint8 values.
+    """
+    labels = {7: "class: robot;"}
+    entry = np.dtype([("sid", "<u4", (4,)), ("len", "<u4"), ("off", "<u4")])
+    entries = np.zeros(len(labels), dtype=entry)
+    table = b""
+    header_size = len(labels) * entry.itemsize
+    for i, (sid, label) in enumerate(labels.items()):
+        entries[i]["sid"][0] = sid
+        entries[i]["len"] = len(label)
+        entries[i]["off"] = header_size + len(table)
+        table += label.encode()
+    raw_id_map = np.frombuffer(
+        entries.tobytes() + table + len(labels).to_bytes(4, "little"), dtype=np.uint8
+    ).copy()
+
+    raw_stable_semantic = np.zeros(
+        1, dtype=[("stable_id", "<u4", (4,)), ("semantic_id", "<u4", (4,))]
+    ).view(np.uint8)
+    raw_instance_map = np.array([3, 0xFFFFFFFF], dtype="<u4").view(np.uint8)
+
     backend = MockBackend()
-    gmo = np.arange(32, dtype=np.uint8)
-    BasicWriter().write_frame(0, {"GenericModelOutput": gmo}, backend)
-    assert any("generic_model_output.npz" in k for k in backend.written)
+    BasicWriter(BasicWriterConfig(colorize=False)).write_frame(
+        0,
+        {
+            "SemanticIdMap": raw_id_map,
+            "StableIdSemanticIdMap": raw_stable_semantic,
+            "InstanceMap": raw_instance_map,
+        },
+        backend,
+    )
+
+    assert _read_json(backend, "0000/semantic_id_map.json") == {"7": "class: robot;"}
+    assert _read_json(backend, "0000/stable_id_semantic_id_map.json") == [
+        {"stable_id": [0, 0, 0, 0], "semantic_id": [0, 0, 0, 0]}
+    ]
+    assert _read_json(backend, "0000/instance_map.json") == [
+        {"instance_index": 0, "stable_semantic_index": 3},
+        {"instance_index": 1, "stable_semantic_index": 0xFFFFFFFF},
+    ]
+
+
+def test_basic_writer_point_cloud_stored_as_npz() -> None:
+    backend = MockBackend()
+    flat = np.arange(32, dtype=np.uint8)
+    BasicWriter().write_frame(0, {"PointCloud": flat}, backend)
+    assert any("point_cloud.npz" in k for k in backend.written)
+
+
+def test_basic_writer_composite_point_cloud_keeps_named_tensors() -> None:
+    """A composite sensor output lands as one npz member per tensor/param."""
+    backend = MockBackend()
+    point_cloud = {
+        "tensors": {
+            "Coordinates": np.arange(9, dtype=np.float32).reshape(3, 3),
+            "Intensity": np.arange(3, dtype=np.float32),
+        },
+        "params": {"frameId": np.array([7], dtype=np.uint64)},
+    }
+    BasicWriter().write_frame(0, {"PointCloud": point_cloud}, backend)
+
+    archive = np.load(io.BytesIO(backend.read("0000/point_cloud.npz")))
+    assert sorted(archive.files) == ["Coordinates", "Intensity", "param_frameId"]
+    np.testing.assert_array_equal(
+        archive["Coordinates"], point_cloud["tensors"]["Coordinates"]
+    )
+    np.testing.assert_array_equal(archive["param_frameId"], np.array([7]))
 
 
 def test_basic_writer_semantic_id_map_written(sample_render_vars) -> None:
@@ -1322,8 +1455,13 @@ def test_bop_writer_writes_depth(sample_render_vars) -> None:
 def test_bop_writer_writes_masks(sample_render_vars) -> None:
     backend = MockBackend()
     BOPWriter().write_frame(0, sample_render_vars, backend)
-    assert any("mask/" in k for k in backend.written)
-    assert any("mask_visib/" in k for k in backend.written)
+    masks = {k: v for k, v in backend.written.items() if "/mask/" in k}
+    assert masks
+    for path, payload in masks.items():
+        visib = backend.written[path.replace("/mask/", "/mask_visib/")]
+        # No occlusion model: both masks are the same PNG.
+        assert visib == payload
+        assert payload.startswith(b"\x89PNG")
 
 
 def test_bop_writer_finalize_writes_scene_json(sample_render_vars) -> None:
@@ -1443,7 +1581,7 @@ def test_lerobot_writer_accumulates_images(sample_render_vars) -> None:
     writer = LeRobotWriter(LeRobotWriterConfig(camera_keys=["top"]))
     writer.write_frame(0, sample_render_vars, backend)
     writer.write_frame(1, sample_render_vars, backend)
-    assert len(writer._frame_images["top"]) == 2
+    assert len(writer._frames) == 2
 
 
 @pytest.mark.skipif(
@@ -1489,11 +1627,12 @@ def test_load_entry_points_handles_exception():
         assert "coco" in WriterRegistry.list_names()
 
 
-def test_load_entry_points_handles_broken_plugin():
+def test_load_entry_points_handles_broken_plugin(caplog):
     """If a specific entry point fails to load, others still work."""
     from unittest.mock import MagicMock, patch
 
     broken_ep = MagicMock()
+    broken_ep.name = "broken_writer"
     broken_ep.load.side_effect = ImportError("broken plugin")
 
     with patch(
@@ -1502,9 +1641,12 @@ def test_load_entry_points_handles_broken_plugin():
     ):
         from ovannotators.writers import WriterRegistry, _load_entry_points
 
-        assert _load_entry_points() is None  # broken plugin is swallowed
+        with caplog.at_level("WARNING", logger="ovannotators.writers"):
+            assert _load_entry_points() is None  # broken plugin is swallowed
         # The broken plugin never registered, but built-ins remain.
         assert "coco" in WriterRegistry.list_names()
+    # The failure is reported rather than silently dropped.
+    assert "broken_writer" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -1592,17 +1734,37 @@ def test_coco_panoptic_skips_uncategorized_instance():
     assert set(writer._categories) == {"car"}
 
 
-def test_coco_panoptic_skips_zero_area(monkeypatch):
-    """Defensive guard: a categorized instance with zero area is skipped."""
+def test_coco_panoptic_uncategorized_frame_is_empty():
     from ovannotators.writers import coco as coco_mod
 
-    inst_seg = np.zeros((8, 8), dtype=np.uint32)
-    inst_seg[1:4, 1:4] = 1
-    writer = coco_mod.COCOWriter(coco_mod.COCOWriterConfig(include_panoptic=True))
-    # Force every counted area to zero so the `area <= 0: continue` guard fires.
-    monkeypatch.setattr(coco_mod.np, "count_nonzero", lambda *a, **k: 0)
-    segments, _panoptic = writer._build_panoptic_segments(inst_seg, {1: 7})
+    inst_seg = np.zeros((4, 5), dtype=np.uint32)
+    inst_seg[1:3, 1:3] = 7  # present but has no category
+    segments, panoptic = coco_mod.COCOWriter._build_panoptic_segments(inst_seg, {3: 11})
     assert segments == []
+    assert panoptic.dtype == np.uint32 and panoptic.shape == (4, 5)
+    assert not panoptic.any()
+
+
+def test_coco_panoptic_segments_bbox_area_and_ids():
+    """Segments follow ascending instance id; uncategorized ids stay 0."""
+    from ovannotators.writers import coco as coco_mod
+
+    inst_seg = np.zeros((6, 8), dtype=np.uint32)
+    inst_seg[1:4, 2:5] = 9  # 3x3 block
+    inst_seg[4, 0:8] = 3  # full-width row
+    inst_seg[0, 7] = 5  # uncategorized
+    segments, panoptic = coco_mod.COCOWriter._build_panoptic_segments(
+        inst_seg, {3: 11, 9: 22}
+    )
+    assert segments == [
+        {"id": 1, "category_id": 11, "area": 8, "bbox": [0, 4, 8, 1], "iscrowd": 0},
+        {"id": 2, "category_id": 22, "area": 9, "bbox": [2, 1, 3, 3], "iscrowd": 0},
+    ]
+    expected = np.zeros_like(inst_seg)
+    expected[inst_seg == 3] = 1
+    expected[inst_seg == 9] = 2
+    assert panoptic.dtype == np.uint32
+    np.testing.assert_array_equal(panoptic, expected)
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -101,6 +102,24 @@ def test_registry_register_returns_class():
         RendererOutputRegistry._registry.pop("_test_renderer_def", None)
 
 
+def test_registry_rejects_conflicting_name():
+    class _FakeRendererA:
+        renderer_name = "_test_renderer_dup"
+
+    class _FakeRendererB:
+        renderer_name = "_test_renderer_dup"
+
+    try:
+        RendererOutputRegistry.register(_FakeRendererA)
+        # Re-registering the same class is idempotent.
+        assert RendererOutputRegistry.register(_FakeRendererA) is _FakeRendererA
+        with pytest.raises(ValueError, match="already registered"):
+            RendererOutputRegistry.register(_FakeRendererB)
+        assert RendererOutputRegistry.get("_test_renderer_dup") is _FakeRendererA
+    finally:
+        RendererOutputRegistry._registry.pop("_test_renderer_dup", None)
+
+
 def test_registry_list_names_is_sorted():
     names = RendererOutputRegistry.list_names()
     assert names == sorted(names)
@@ -176,14 +195,14 @@ def test_ovrtx_extract_uses_warp_from_dlpack_for_cpu():
     assert result is fake_wp
 
 
-def test_ovrtx_available_vars_returns_keys():
+def test_ovrtx_available_vars_returns_source_names():
+    """ovrtx 0.5 keys render_vars by prim path; we report the sourceName."""
     output = OvrtxOutput()
     mock_frame = MagicMock()
-    mock_frame.render_vars.keys.return_value = [
-        "LdrColor",
-        "DistanceToCameraSD",
-        "NormalSD",
-    ]
+    mock_frame.render_vars = {
+        f"/Render/Camera/{name}": SimpleNamespace(source_name=name)
+        for name in ("LdrColor", "DistanceToCameraSD", "NormalSD")
+    }
 
     result = output.available_vars(mock_frame)
     assert set(result) == {"LdrColor", "DistanceToCameraSD", "NormalSD"}

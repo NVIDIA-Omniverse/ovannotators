@@ -45,4 +45,4 @@ A standalone Python library that handles data parsing and data writing
     - LeRobot
     - MS-COCO
     - YOLO
-- **Backends** — Initial support should be for writing to disk, storageAPI and S3 buckets.
+- **Backends** — Initial support should be for writing to disk, S3 buckets, and ovstorage.

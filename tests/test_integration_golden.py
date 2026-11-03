@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import gc
 import json
 import os
 import tempfile
@@ -74,11 +73,10 @@ UPDATE_GOLDEN = os.environ.get("UPDATE_GOLDEN", "0") == "1"
 @pytest.fixture(scope="module")
 def rendered_frame_dir():
     """Render frame 0 from ``test_scene.usda`` and return output dir path."""
-    import ovrtx
-
     from ovannotators.backends.disk import DiskBackend, DiskBackendConfig
     from ovannotators.renderer_outputs.ovrtx import OvrtxOutput
     from ovannotators.writers.basic import BasicWriter, BasicWriterConfig
+    from tests._ovstage_session import OvstageSession
 
     usda = SCENE_USDA.read_text()
 
@@ -87,20 +85,14 @@ def rendered_frame_dir():
         backend = DiskBackend(DiskBackendConfig(root_dir=str(out_dir), overwrite=True))
         writer = BasicWriter(BasicWriterConfig(colorize=True))
 
-        renderer = ovrtx.Renderer()
-        renderer.open_usd_from_string(usda)
+        session = OvstageSession("integration-golden")
+        session.open_usd_from_string(usda)
 
         # RT2 warmup per ovrtx guidance: textures + convergence.
         for _ in range(WARMUP_FRAMES):
-            renderer.step(
-                render_products={ALL_ANNOTATORS_PRODUCT},
-                delta_time=1 / 60,
-            )
+            session.step({ALL_ANNOTATORS_PRODUCT}, 1 / 60)
 
-        products = renderer.step(
-            render_products={ALL_ANNOTATORS_PRODUCT},
-            delta_time=1 / 60,
-        )
+        products = session.step({ALL_ANNOTATORS_PRODUCT}, 1 / 60)
 
         output = OvrtxOutput()
         render_vars_out: dict[str, np.ndarray] = {}
@@ -113,8 +105,8 @@ def rendered_frame_dir():
                 try:
                     extracted = output.extract(frame, source_name)
                 except Exception:
-                    # Sensor-style outputs (e.g. GenericModelOutput) may be
-                    # absent on a camera render product; ignore those.
+                    # Sensor-style outputs (e.g. PointCloud) may be absent on a
+                    # camera render product; ignore those.
                     continue
                 # Copy into owned host memory: ovrtx returns zero-copy views
                 # that keep the render-var mapping alive, which would otherwise
@@ -139,8 +131,7 @@ def rendered_frame_dir():
         # it does not race ovrtx/omni atexit teardown (which can hang) at the
         # end of the session.
         del products
-        del renderer
-        gc.collect()
+        session.close()
 
         frame_dir = out_dir / "0000"
         if UPDATE_GOLDEN:

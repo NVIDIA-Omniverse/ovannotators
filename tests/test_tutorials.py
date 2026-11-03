@@ -38,6 +38,7 @@ from __future__ import annotations
 import gc
 import json
 import re
+import runpy
 import textwrap
 from pathlib import Path
 
@@ -49,6 +50,7 @@ from ovannotators.writers._registry import WriterRegistry
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TUTORIALS_RST = REPO_ROOT / "docs" / "public" / "tutorials.rst"
 QUICKSTART_PY = REPO_ROOT / "docs" / "public" / "examples" / "quickstart.py"
+QUICKSTART_CPU_PY = REPO_ROOT / "examples" / "quickstart_cpu.py"
 OUT_ROOT = REPO_ROOT / "_out" / "tutorials"
 
 # Keep the rendered tutorials quick: cap the documented loop counts.
@@ -425,6 +427,26 @@ def test_quickstart_example(out_root: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# CPU Quick Start — examples/quickstart_cpu.py (literalinclude'd in index.rst)
+# ---------------------------------------------------------------------------
+
+
+def test_quickstart_cpu_example(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    runpy.run_path(str(QUICKSTART_CPU_PY), run_name="__main__")
+
+    assert "Wrote 15 files to _out/quickstart_cpu" in capsys.readouterr().out
+    out = tmp_path / "_out" / "quickstart_cpu"
+    assert sorted(p.name for p in (out / "0000").iterdir()) == [
+        "distance_to_camera.exr",
+        "distance_to_camera_colorized.png",
+        "ldr_color.png",
+        "normal.exr",
+        "normal_colorized.png",
+    ]
+
+
+# ---------------------------------------------------------------------------
 # Tutorial 1 — Basic COCO Dataset from ovrtx
 # ---------------------------------------------------------------------------
 
@@ -531,8 +553,8 @@ def test_tutorial_5_cosmos_transfer(out_root: Path) -> None:
     variation_stub = textwrap.dedent(
         """
         class _Variation:
-            def apply(self, renderer):
-                pass
+            def apply(self, stage, ordinal):
+                return ordinal
 
         scene_variations = [_Variation()]
         """
@@ -585,7 +607,7 @@ def test_tutorial_6_custom_writer(out_root: Path) -> None:
     for frame_id in range(3):
         writer.write_frame(
             frame_id,
-            {"depth": rng.uniform(0.5, 20.0, (32, 32)).astype(np.float32)},
+            {"DistanceToCameraSD": rng.uniform(0.5, 20.0, (32, 32)).astype(np.float32)},
             backend,
         )
     writer.finalize(backend)

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import warp as wp
 
 from ovannotators.types import (
     BBox2D,
@@ -268,8 +269,10 @@ def test_camera_params_frozen():
 
 
 def test_pointcloud_result_minimal():
-    pts = np.zeros((100, 3), dtype=np.float32)
+    pts = wp.zeros((100, 3), dtype=wp.float32, device="cpu")
     pc = PointCloudResult(points=pts, normals=None, colors=None, semantic_ids=None)
+    assert isinstance(pc.points, wp.array) and pc.points.device.is_cpu
+    assert pc.count is None
     assert pc.points.shape == (100, 3)
     assert pc.normals is None
     assert pc.colors is None
@@ -277,10 +280,10 @@ def test_pointcloud_result_minimal():
 
 
 def test_pointcloud_result_all_fields():
-    pts = np.zeros((50, 3), dtype=np.float32)
-    nrm = np.ones((50, 3), dtype=np.float32)
-    clr = np.zeros((50, 4), dtype=np.uint8)
-    sem = np.arange(50, dtype=np.uint32)
+    pts = wp.zeros((50, 3), dtype=wp.float32, device="cpu")
+    nrm = wp.ones((50, 3), dtype=wp.float32, device="cpu")
+    clr = wp.zeros((50, 4), dtype=wp.uint8, device="cpu")
+    sem = wp.array(np.arange(50, dtype=np.uint32), device="cpu")
     pc = PointCloudResult(points=pts, normals=nrm, colors=clr, semantic_ids=sem)
     assert pc.normals is not None
     assert pc.colors is not None
@@ -289,7 +292,7 @@ def test_pointcloud_result_all_fields():
 
 
 def test_pointcloud_result_frozen():
-    pts = np.zeros((10, 3), dtype=np.float32)
+    pts = wp.zeros((10, 3), dtype=wp.float32, device="cpu")
     pc = PointCloudResult(points=pts, normals=None, colors=None, semantic_ids=None)
     with pytest.raises(Exception):
         pc.points = pts  # type: ignore[misc]

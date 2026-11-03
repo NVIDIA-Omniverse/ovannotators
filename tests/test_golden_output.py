@@ -186,11 +186,11 @@ class TestBasicWriterGolden:
         writer = BasicWriter(BasicWriterConfig(colorize=True))
         out = _run_writer(writer, tmp_path)
 
-        # Depth is now stored as a single-channel half-float EXR.
+        # Float32 depth stays float32 so large values do not overflow.
         depth = read_exr(str(out / "0000" / "distance_to_camera.exr"))
         depth = np.squeeze(depth, axis=-1)
         assert depth.shape == (H, W)
-        assert depth.dtype == np.float16
+        assert depth.dtype == np.float32
         # Raytraced depth: 0 for misses, positive for hits
         assert depth.min() >= 0.0
         assert depth.max() <= 100.0
@@ -631,18 +631,20 @@ class TestOvrtxIntegration:
         """Verify ovrtx renders a properly lit scene with all objects."""
         import ovrtx
 
-        renderer = ovrtx.Renderer()
+        from tests._ovstage_session import OvstageSession, render_var
+
+        session = OvstageSession("golden-output")
         try:
-            renderer.open_usd(str(self.SCENE_PATH.resolve()))
+            session.open_usd(self.SCENE_PATH.resolve())
 
             # Settle
             for _ in range(20):
-                outputs = renderer.step({"/Render/RenderProduct_001"}, 0.0)
+                outputs = session.step({"/Render/RenderProduct_001"}, 0.0)
 
             prod = outputs["/Render/RenderProduct_001"]
             frame = prod.frames[0]
 
-            with frame.render_vars["LdrColor"].map(device=ovrtx.Device.CPU) as rv:
+            with render_var(frame, "LdrColor").map(device=ovrtx.Device.CPU) as rv:
                 ldr = np.from_dlpack(rv).copy()[:, :, :3]
 
             # The real render resolution is dictated by the scene's
@@ -660,7 +662,7 @@ class TestOvrtxIntegration:
             # Scene should render something (emissive lit)
             assert ldr.mean() > 5.0, f"Scene too dark: mean={ldr.mean():.1f}"
 
-            with frame.render_vars["SemanticInstanceSegmentation"].map(
+            with render_var(frame, "SemanticInstanceSegmentation").map(
                 device=ovrtx.Device.CPU
             ) as rv:
                 inst_seg = np.from_dlpack(rv).copy()
@@ -690,7 +692,9 @@ class TestOvrtxIntegration:
             # the renderer, then destroy it deterministically. ovrtx logs
             # leak errors (and can hang at interpreter exit) if a renderer is
             # torn down by GC while step results or mappings are still alive.
-            outputs = prod = frame = None  # noqa: F841
+            # ``rv`` stays bound after each ``with ... as rv`` block and still
+            # holds a DLPack view of the mapping, so clear it too or the
+            # renderer reports an active mapping when destroyed.
+            outputs = prod = frame = rv = None  # noqa: F841
             gc.collect()
-            del renderer
-            gc.collect()
+            session.close()

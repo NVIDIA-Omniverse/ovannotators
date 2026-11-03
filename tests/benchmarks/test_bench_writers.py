@@ -1,76 +1,113 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 
-"""Benchmarks for writer write_frame() performance.
-
-Measures per-frame throughput for each writer with realistic data.
-"""
+"""Benchmarks for writer transformations and meaningful finalization work."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
+import numpy as np
 import pytest
 
+from ovannotators.backends._encoding import encode_array
 from ovannotators.writers._registry import WriterRegistry
+from ovannotators.writers.cosmos_transfer import CosmosTransferWriter
 
 
-# ---------------------------------------------------------------------------
-# Writer benchmarks
-# ---------------------------------------------------------------------------
+class _NullBackend:
+    """Accept backend operations without I/O or call-history bookkeeping."""
+
+    def makedirs(self, path: str) -> None:
+        return None
+
+    def write(self, path: str, data: bytes) -> None:
+        return None
+
+    def write_array(self, path: str, array, encoding: str = "npy") -> None:
+        return None
+
+    def exists(self, path: str) -> bool:
+        return False
+
+    def read(self, path: str) -> bytes:
+        return b"[]"
+
+    def list(self, prefix: str = "") -> list[str]:
+        return []
+
+
+@pytest.fixture
+def null_backend() -> _NullBackend:
+    return _NullBackend()
+
+
+class _EncodingNullBackend(_NullBackend):
+    """Encode arrays like a real backend, then discard the bytes.
+
+    Use this for writers that encode some outputs themselves (BOP encodes each
+    object mask once and writes the bytes to both mask paths). With
+    ``_NullBackend`` the encodes a writer delegates to ``write_array`` would be
+    free and the ones it does itself would not, so the benchmark would move
+    whenever encoding moved between the writer and the backend.
+    """
+
+    def write_array(self, path: str, array, encoding: str = "npy") -> None:
+        encode_array(path, array, encoding)
+
+
+@pytest.fixture
+def encoding_backend() -> _EncodingNullBackend:
+    return _EncodingNullBackend()
 
 
 class TestWriterPerFrame:
-    """Benchmark write_frame() for each writer."""
+    """Benchmark one independent ``write_frame`` operation per round."""
 
-    @pytest.fixture
-    def mock_backend(self):
-        """Mock backend that accepts writes without I/O."""
-        backend = MagicMock()
-        backend.makedirs = MagicMock()
-        backend.write = MagicMock()
-        backend.write_array = MagicMock()
-        backend.exists = MagicMock(return_value=False)
-        return backend
+    def test_basic_writer(self, benchmark, null_backend, render_vars_full):
+        def setup():
+            return (
+                (WriterRegistry.get("basic")(), 0, render_vars_full, null_backend),
+                {},
+            )
 
-    def test_basic_writer(self, benchmark, mock_backend, render_vars_full):
-        writer = WriterRegistry.get("basic")()
-        benchmark(writer.write_frame, 0, render_vars_full, mock_backend)
+        benchmark.pedantic(
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=10,
+            iterations=1,
+        )
 
     def test_coco_writer(
-        self, benchmark, mock_backend, rgb_frame, bbox_2d_data, semantic_id_map
+        self, benchmark, null_backend, rgb_frame, bbox_2d_data, semantic_id_map
     ):
-        writer = WriterRegistry.get("coco")()
         render_vars = {
             "LdrColor": rgb_frame,
             "SemanticBoundingBox2DTight": bbox_2d_data,
             "SemanticIdMap": semantic_id_map,
         }
-        benchmark(writer.write_frame, 0, render_vars, mock_backend)
+
+        def setup():
+            return (
+                (WriterRegistry.get("coco")(), 0, render_vars, null_backend),
+                {},
+            )
+
+        benchmark.pedantic(
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=50,
+            iterations=1,
+        )
 
     def test_kitti_writer(
         self,
         benchmark,
-        mock_backend,
+        null_backend,
         rgb_frame,
         bbox_2d_data,
         bbox_3d_data,
         camera_params,
         semantic_id_map,
     ):
-        writer = WriterRegistry.get("kitti")()
         render_vars = {
             "LdrColor": rgb_frame,
             "SemanticBoundingBox2DTight": bbox_2d_data,
@@ -78,133 +115,155 @@ class TestWriterPerFrame:
             "CameraParams": camera_params,
             "SemanticIdMap": semantic_id_map,
         }
-        benchmark(writer.write_frame, 0, render_vars, mock_backend)
 
-    def test_yolo_writer(
-        self, benchmark, mock_backend, rgb_frame, bbox_2d_data, semantic_id_map
-    ):
-        writer = WriterRegistry.get("yolo")()
-        render_vars = {
-            "LdrColor": rgb_frame,
-            "SemanticBoundingBox2DTight": bbox_2d_data,
-            "SemanticIdMap": semantic_id_map,
-        }
-        benchmark(writer.write_frame, 0, render_vars, mock_backend)
-
-    def test_bop_writer(self, benchmark, mock_backend, render_vars_full):
-        writer = WriterRegistry.get("bop")()
-        benchmark(writer.write_frame, 0, render_vars_full, mock_backend)
-
-    def test_lerobot_writer(self, benchmark, mock_backend, rgb_frame):
-        # Fresh writer per round so accumulated frames don't grow unbounded.
-        render_vars = {"LdrColor": rgb_frame}
-
-        def setup():
-            return (WriterRegistry.get("lerobot")(), 0, render_vars, mock_backend), {}
-
-        benchmark.pedantic(
-            lambda w, f, rv, b: w.write_frame(f, rv, b), setup=setup, rounds=20
-        )
-
-    def test_cosmos_writer(self, benchmark, mock_backend, render_vars_full):
-        # Fresh writer per round so accumulated frames don't grow unbounded.
         def setup():
             return (
-                (
-                    WriterRegistry.get("cosmos_transfer")(),
-                    0,
-                    render_vars_full,
-                    mock_backend,
-                ),
+                (WriterRegistry.get("kitti")(), 0, render_vars, null_backend),
                 {},
             )
 
         benchmark.pedantic(
-            lambda w, f, rv, b: w.write_frame(f, rv, b), setup=setup, rounds=20
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=50,
+            iterations=1,
+        )
+
+    def test_yolo_writer(
+        self, benchmark, null_backend, rgb_frame, bbox_2d_data, semantic_id_map
+    ):
+        render_vars = {
+            "LdrColor": rgb_frame,
+            "SemanticBoundingBox2DTight": bbox_2d_data,
+            "SemanticIdMap": semantic_id_map,
+        }
+
+        def setup():
+            return (
+                (WriterRegistry.get("yolo")(), 0, render_vars, null_backend),
+                {},
+            )
+
+        benchmark.pedantic(
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=50,
+            iterations=1,
+        )
+
+    def test_bop_writer_encoded(self, benchmark, encoding_backend, render_vars_full):
+        def setup():
+            return (
+                (WriterRegistry.get("bop")(), 0, render_vars_full, encoding_backend),
+                {},
+            )
+
+        benchmark.pedantic(
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=10,
+            iterations=1,
+        )
+
+    def test_lerobot_writer(self, benchmark, null_backend, rgb_frame):
+        render_vars = {"LdrColor": rgb_frame}
+
+        def setup():
+            return (
+                (WriterRegistry.get("lerobot")(), 0, render_vars, null_backend),
+                {},
+            )
+
+        benchmark.pedantic(
+            lambda w, f, rv, b: w.write_frame(f, rv, b),
+            setup=setup,
+            rounds=20,
+            iterations=1,
+        )
+
+
+class TestSegmentationColorization:
+    """Benchmark the four-channel instance-ID to palette conversion."""
+
+    def test_twelve_ids_at_512_square(self, benchmark):
+        ids = np.zeros((12, 4), dtype=np.uint32)
+        ids[1:, 0] = np.arange(1, 12, dtype=np.uint32)
+        ids[1:, 1] = ids[1:, 0] * 17
+        rng = np.random.default_rng(101)
+        frame = ids[rng.integers(0, len(ids), size=(512, 512))]
+        writer = CosmosTransferWriter()
+
+        benchmark.pedantic(
+            writer._seg_to_color,
+            args=(frame,),
+            rounds=10,
+            iterations=1,
         )
 
 
 class TestWriterFinalize:
-    """Benchmark finalize() with accumulated frame data."""
+    """Benchmark serialization using fresh populated writer state each round."""
 
-    @pytest.fixture
-    def mock_backend(self):
-        backend = MagicMock()
-        backend.makedirs = MagicMock()
-        backend.write = MagicMock()
-        backend.write_array = MagicMock()
-        backend.exists = MagicMock(return_value=False)
-        backend.read = MagicMock(return_value=b"[]")
-        backend.list = MagicMock(return_value=[])
-        return backend
-
-    def test_coco_finalize_100_frames(
-        self, benchmark, mock_backend, rgb_frame, bbox_2d_data, semantic_id_map
+    def test_coco_finalize_serialization_100_frames(
+        self, benchmark, null_backend, rgb_frame, bbox_2d_data, semantic_id_map
     ):
-        """COCO finalize with 100 accumulated frames."""
-        writer = WriterRegistry.get("coco")()
         render_vars = {
             "LdrColor": rgb_frame,
             "SemanticBoundingBox2DTight": bbox_2d_data,
             "SemanticIdMap": semantic_id_map,
         }
-        for i in range(100):
-            writer.write_frame(i, render_vars, mock_backend)
-        benchmark(writer.finalize, mock_backend)
 
-    def test_kitti_finalize(self, benchmark, mock_backend, render_vars_full):
-        """KITTI finalize is a no-op; measures its baseline overhead."""
-        writer = WriterRegistry.get("kitti")()
-        writer.write_frame(0, render_vars_full, mock_backend)
-        benchmark(writer.finalize, mock_backend)
+        def setup():
+            writer = WriterRegistry.get("coco")()
+            for i in range(100):
+                writer.write_frame(i, render_vars, null_backend)
+            return (writer, null_backend), {}
 
-    def test_yolo_finalize_100_frames(
-        self, benchmark, mock_backend, rgb_frame, bbox_2d_data, semantic_id_map
-    ):
-        """YOLO finalize (data.yaml) after 100 accumulated frames."""
-        writer = WriterRegistry.get("yolo")()
-        render_vars = {
-            "LdrColor": rgb_frame,
-            "SemanticBoundingBox2DTight": bbox_2d_data,
-            "SemanticIdMap": semantic_id_map,
-        }
-        for i in range(100):
-            writer.write_frame(i, render_vars, mock_backend)
-        benchmark(writer.finalize, mock_backend)
+        benchmark.pedantic(
+            lambda w, b: w.finalize(b),
+            setup=setup,
+            rounds=10,
+            iterations=1,
+        )
 
-    def test_bop_finalize_20_frames(self, benchmark, mock_backend, render_vars_full):
-        """BOP finalize (scene JSON) after 20 accumulated frames."""
-        writer = WriterRegistry.get("bop")()
-        for i in range(20):
-            writer.write_frame(i, render_vars_full, mock_backend)
-        benchmark(writer.finalize, mock_backend)
+    def test_bop_finalize_1_frame(self, benchmark, null_backend, render_vars_full):
+        def setup():
+            writer = WriterRegistry.get("bop")()
+            writer.write_frame(0, render_vars_full, null_backend)
+            return (writer, null_backend), {}
 
-    def test_lerobot_finalize(self, benchmark, mock_backend, rgb_frame):
-        """LeRobot finalize (video encode + parquet + meta).
+        benchmark.pedantic(
+            lambda w, b: w.finalize(b),
+            setup=setup,
+            rounds=10,
+            iterations=1,
+        )
 
-        Requires pyarrow and a video encoder; skipped when unavailable.
-        """
+    def test_lerobot_finalize(self, benchmark, null_backend, rgb_frame):
         pytest.importorskip("pyarrow")
         from ovannotators.writers.lerobot import LeRobotWriterConfig
 
-        # Pre-check: try a full run to see if video encoder is available.
-        # Skip before entering benchmark to avoid empty stats.
         writer = WriterRegistry.get("lerobot")(
             LeRobotWriterConfig(fps=10, frames_per_chunk=1000)
         )
         for i in range(4):
-            writer.write_frame(i, {"LdrColor": rgb_frame}, mock_backend)
+            writer.write_frame(i, {"LdrColor": rgb_frame}, null_backend)
         try:
-            writer.finalize(mock_backend)
+            writer.finalize(null_backend)
         except (ImportError, FileNotFoundError, RuntimeError) as exc:
             pytest.skip(f"video/parquet backend unavailable: {exc}")
 
-        def run():
-            w = WriterRegistry.get("lerobot")(
+        def setup():
+            current = WriterRegistry.get("lerobot")(
                 LeRobotWriterConfig(fps=10, frames_per_chunk=1000)
             )
             for i in range(4):
-                w.write_frame(i, {"LdrColor": rgb_frame}, mock_backend)
-            w.finalize(mock_backend)
+                current.write_frame(i, {"LdrColor": rgb_frame}, null_backend)
+            return (current, null_backend), {}
 
-        benchmark.pedantic(run, rounds=2, iterations=1)
+        benchmark.pedantic(
+            lambda w, b: w.finalize(b),
+            setup=setup,
+            rounds=3,
+            iterations=1,
+        )

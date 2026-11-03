@@ -411,7 +411,7 @@ def cosmos_out(tmp_path_factory, rendered_scene_vars):
     return SimpleNamespace(dir=tmp, frames=frames)
 
 
-def _fake_encode_video(frames, fps):  # noqa: ANN001 - test stub signature
+def _fake_encode_video(frames, fps, **kwargs):  # noqa: ANN001 - test stub signature
     """Stand-in for NVENC encoding so the golden test needs no GPU codec.
 
     The LeRobot golden asserts on deterministic metadata (parquet + meta JSON),
@@ -444,7 +444,7 @@ def lerobot_out(tmp_path_factory, rendered_scene_vars):
     )
     # The frame fed to the (GPU, non-deterministic) video encoder. Captured for
     # content coverage; the encoded MP4 itself is faked below.
-    video_frame = writer._frame_images["top"][0].copy()
+    video_frame = writer._frames[0].copy()
     with patch("ovannotators.writers.lerobot._encode_video", _fake_encode_video):
         writer.finalize(backend)
     return SimpleNamespace(dir=tmp, video_frame=video_frame)

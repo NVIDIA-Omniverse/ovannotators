@@ -1,0 +1,11 @@
+{
+  "arrays": {
+    "data/action": {"chunks": [9, 2], "dtype": "float32", "shape": [9, 2]},
+    "data/camera0_rgb": {"chunks": [1, 3, 4, 3], "dtype": "uint8", "shape": [9, 3, 4, 3]},
+    "data/robot0_state": {"chunks": [9, 2], "dtype": "float32", "shape": [9, 2]},
+    "data/timestamp_ns": {"chunks": [9], "dtype": "int64", "shape": [9]},
+    "meta/episode_ends": {"chunks": [3], "dtype": "int64", "shape": [3]}
+  },
+  "episode_ends": [3, 6, 9],
+  "status": "candidate_pending_human_approval"
+}

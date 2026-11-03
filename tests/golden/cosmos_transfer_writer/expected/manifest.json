@@ -19,7 +19,12 @@
         720
       ],
       "rgb_video": "videos/000000_rgb.mp4",
-      "thumbnail": "thumbnails/000000.jpg"
+      "thumbnail": "thumbnails/000000.jpg",
+      "video_encoding": {
+        "codec": "h264",
+        "lossless": false,
+        "pixel_format": "yuv420p"
+      }
     }
   ],
   "version": "cosmos-transfer-2.5"

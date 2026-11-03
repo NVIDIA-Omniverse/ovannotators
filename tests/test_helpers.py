@@ -51,6 +51,7 @@ from ovannotators.writers._helpers import (
     mask_to_polygon,
     mask_to_rle,
     point_cloud_from_depth,
+    to_rgb_uint8,
 )
 
 
@@ -646,7 +647,7 @@ class TestPointCloudFromDepth:
     def test_backprojects_center_pixel(self):
         depth = np.zeros((3, 3), dtype=np.float32)
         depth[1, 1] = 5.0  # only the centre pixel is valid
-        pc = point_cloud_from_depth(depth, self._camera())
+        pc = point_cloud_from_depth(depth, self._camera(), device="cpu")
         assert isinstance(pc, PointCloudResult)
         # Centre pixel (u=cx, v=cy) back-projects to (0, 0, z).
         np.testing.assert_allclose(pc.points, [[0.0, 0.0, 5.0]])
@@ -656,7 +657,7 @@ class TestPointCloudFromDepth:
     def test_drops_invalid_depth(self):
         depth = np.full((2, 2), np.nan, dtype=np.float32)
         depth[0, 0] = -1.0  # non-positive is also dropped
-        pc = point_cloud_from_depth(depth, self._camera())
+        pc = point_cloud_from_depth(depth, self._camera(), device="cpu")
         assert pc.points.shape == (0, 3)
 
     def test_carries_colors_and_semantic_ids(self):
@@ -664,7 +665,7 @@ class TestPointCloudFromDepth:
         colors = np.arange(2 * 2 * 3, dtype=np.uint8).reshape(2, 2, 3)
         sem = np.arange(4, dtype=np.uint32).reshape(2, 2)
         pc = point_cloud_from_depth(
-            depth, self._camera(), colors=colors, semantic_ids=sem
+            depth, self._camera(), colors=colors, semantic_ids=sem, device="cpu"
         )
         assert pc.points.shape == (4, 3)
         assert pc.colors.shape == (4, 3)
@@ -674,7 +675,9 @@ class TestPointCloudFromDepth:
         """A trailing channel axis on depth and semantic ids is squeezed."""
         depth = np.ones((2, 2, 1), dtype=np.float32)  # (H, W, 1) depth
         sem = np.arange(4, dtype=np.uint32).reshape(2, 2, 1)  # (H, W, 1) ids
-        pc = point_cloud_from_depth(depth, self._camera(), semantic_ids=sem)
+        pc = point_cloud_from_depth(
+            depth, self._camera(), semantic_ids=sem, device="cpu"
+        )
         assert pc.points.shape == (4, 3)
         assert pc.semantic_ids.shape == (4,)
 
@@ -710,3 +713,48 @@ class TestIdAndInstanceHelpers:
         assert set(masks) == {7}
         assert masks[7].shape == (4, 4)
         assert masks[7].sum() == 4  # the 2x2 region set to id 7
+
+
+# ---------------------------------------------------------------------------
+# to_rgb_uint8
+# ---------------------------------------------------------------------------
+
+
+class TestToRgbUint8:
+    def test_rgba_drops_alpha(self):
+        rgba = np.zeros((3, 4, 4), dtype=np.uint8)
+        rgba[..., 3] = 128
+        rgba[..., 0] = 10
+        out = to_rgb_uint8(rgba)
+        assert out.shape == (3, 4, 3)
+        assert out[0, 0].tolist() == [10, 0, 0]
+
+    def test_grayscale_replicated_across_channels(self):
+        gray = np.arange(4, dtype=np.uint8).reshape(2, 2)
+        out = to_rgb_uint8(gray)
+        assert out.shape == (2, 2, 3)
+        assert out[1, 1].tolist() == [3, 3, 3]
+
+    def test_single_channel_axis_squeezed(self):
+        out = to_rgb_uint8(np.ones((2, 2, 1), dtype=np.uint8) * 5)
+        assert out.shape == (2, 2, 3)
+        assert out[0, 0].tolist() == [5, 5, 5]
+
+    def test_float_scaled_and_clipped(self):
+        """Floats are treated as [0, 1] and scaled to the 8-bit range."""
+        arr = np.array([[[0.0, 0.5, 1.0]], [[-1.0, 2.0, 0.25]]], dtype=np.float32)
+        out = to_rgb_uint8(arr)
+        assert out.dtype == np.uint8
+        assert out[0, 0].tolist() == [0, 127, 255]
+        assert out[1, 0].tolist() == [0, 255, 63]
+
+    def test_warp_array_input(self):
+        """Warp arrays are converted to host NumPy before the RGB fixup."""
+        arr = wp.array(np.zeros((2, 2, 4), dtype=np.uint8), device="cpu")
+        out = to_rgb_uint8(arr)
+        assert out.shape == (2, 2, 3) and out.dtype == np.uint8
+
+    def test_output_is_contiguous(self):
+        """Codecs require contiguous buffers; the alpha-slice view is copied."""
+        out = to_rgb_uint8(np.zeros((2, 2, 4), dtype=np.uint8))
+        assert out.flags["C_CONTIGUOUS"]

@@ -45,7 +45,8 @@ Assign one primary category before fixing:
 
 - Reproduce the smallest failing test before broad changes.
 - Do not mark tests flaky/xfail just to make CI green.
-- Do not re-bless golden data unless the behavior change is intended and a human approves.
+- Do not re-bless golden data unless the behavior change is intended and a human approves. Re-bless only the files whose change you can name; see the golden discipline in `skills/gpu-verification/SKILL.md`.
+- A green CI run does not clear renderer, NVENC, or golden paths: CI has no GPU or `ovrtx`. Reproduce those locally per `skills/gpu-verification/SKILL.md` before concluding `PRE_EXISTING` or `INFRASTRUCTURE`.
 - If a GPU/e2e failure only reproduces on a specific runner, preserve artifacts and environment details.
 - After three unsuccessful fix attempts, stop and escalate with a concise causal-chain summary.
 

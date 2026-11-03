@@ -7,13 +7,15 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ovannotators"
-version = "0.1.0"
+version = "0.2.0"
 description = "Ground-truth annotation library for Isaac Sim / OmniVerse renderers"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 dependencies = [
     "numpy",
-    "Pillow>=12.3.0",
+    # Pillow ships breaking removals in each yearly major; test and lift the
+    # cap when Pillow 14 is announced.
+    "Pillow>=13.0.0,<14",
     "openexr",
     "warp-lang",
 ]
@@ -23,11 +25,21 @@ dependencies = [
 s3 = [
     "boto3",
 ]
-storage-api = [
-    "httpx",
+ovstorage = [
+    # Pre-1.0 SDK: 0.4 replaces the paginated list API the adapter uses.
+    "ovstorage>=0.3,<0.4",
 ]
 lerobot = [
     "pyarrow",
+]
+cosmos-multiview = [
+    "pylance==11.0.0",
+    "pyarrow==25.0.1",
+]
+umi = [
+    "zarr>=2.16,<3",
+    "numcodecs>=0.11,<0.13",
+    "imagecodecs-numcodecs>=2023.9.18",
 ]
 # --- GPU-only feature extras (require an NVIDIA GPU + CUDA at runtime) ---
 gpu = [
@@ -39,7 +51,7 @@ video = [
 # --- Aggregate runtime extras ---
 # CPU-installable feature set: everything that works without a GPU.
 all-cpu = [
-    "ovannotators[s3,storage-api,lerobot]",
+    "ovannotators[s3,ovstorage,lerobot,cosmos-multiview,umi]",
 ]
 # Full GPU runtime: the CPU set plus the GPU-only codecs.
 all-gpu = [
@@ -60,12 +72,17 @@ test = [
     "pytest-cov",
     "pytest-benchmark",
     "pyyaml",
+    "webdataset==1.0.2",
 ]
 # --- Development extras ---
 # CPU-only dev environment: tooling + the CPU feature set. Used by CI, which
-# has no GPU. boto3/httpx/pyarrow come transitively from all-cpu.
+# has no GPU. boto3/pyarrow come transitively from all-cpu.
 dev-cpu = [
-    "ruff",
+    # Pinned to the version the lint job installs. ruff enables new rules in
+    # its default set on minor releases, so an unpinned floor lets `uv sync`
+    # and CI disagree and turns the lint job red on commits that changed
+    # nothing. Bump this, the lock, and .github/workflows/ci.yml together.
+    "ruff==0.15.16",
     "sphinx",
     "nvidia-sphinx-theme",
     "sphinx-copybutton",
@@ -74,9 +91,15 @@ dev-cpu = [
     "ovannotators[all-cpu,test]",
 ]
 # Full local dev environment: CPU dev tooling + GPU runtime + ovrtx renderer.
+# ovstage owns stage population from ovrtx 0.4 on: the renderer's own USD entry
+# points (open_usd, update_from_usd_time, ...) are deprecated in favour of
+# ovstage.population + Renderer.attach_ovstage().
+# ovrtx and ovstage must come from the same release train -- 0.5 pairs with
+# ovstage 0.2, and mixing them mixes their bundled OpenUSD runtimes.
 dev = [
     "ovannotators[dev-cpu,gpu,video]",
-    "ovrtx",
+    "ovrtx>=0.5,<0.6",
+    "ovstage>=0.2,<0.3",
 ]
 
 [project.entry-points."ovannotators.renderer_outputs"]
@@ -87,24 +110,52 @@ basic = "ovannotators.writers.basic:BasicWriter"
 coco = "ovannotators.writers.coco:COCOWriter"
 kitti = "ovannotators.writers.kitti:KITTIWriter"
 yolo = "ovannotators.writers.yolo:YOLOWriter"
+openlabel = "ovannotators.writers.openlabel:OpenLABELWriter"
 bop = "ovannotators.writers.bop:BOPWriter"
 lerobot = "ovannotators.writers.lerobot:LeRobotWriter"
 cosmos_transfer = "ovannotators.writers.cosmos_transfer:CosmosTransferWriter"
 
+[project.entry-points."ovannotators.profile_writers"]
+cosmos_multiview = "ovannotators.profile_writers.cosmos_multiview:CosmosMultiviewWriter"
+groot_lerobot_v2 = "ovannotators.profile_writers.groot_lerobot_v2:GrootLeRobotV2Writer"
+umi_replay_buffer = "ovannotators.profile_writers.umi_replay_buffer:UMIReplayBufferWriter"
+
 [project.entry-points."ovannotators.backends"]
 disk = "ovannotators.backends.disk:DiskBackend"
 s3 = "ovannotators.backends.s3:S3Backend"
-storage_api = "ovannotators.backends.storage_api:StorageAPIBackend"
+ovstorage = "ovannotators.backends.ovstorage:OvstorageBackend"
 
 [tool.uv]
 managed = true
 
+[tool.ruff.lint]
+extend-select = [
+    "D100",
+    "D104",
+    "D101",
+    "D102",
+    "D103",
+    "D200",
+    "D205",
+    "D400",
+    "D401",
+    "D404",
+    "D415",
+    "D417",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
+
 [tool.hatch.build.targets.wheel]
-packages = ["source/ovannotators"]
+packages = ["src/ovannotators"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-    "source/ovannotators/",
+    "src/ovannotators/",
     "tests/",
     "scripts/",
     "docs/public/",
@@ -150,7 +201,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["source/ovannotators"]
+source = ["src/ovannotators"]
 
 [tool.coverage.report]
 exclude_lines = [

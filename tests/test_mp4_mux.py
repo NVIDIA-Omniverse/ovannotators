@@ -17,11 +17,12 @@
 
 from __future__ import annotations
 
+import random
 import struct
 
 import pytest
 
-from ovannotators._internal.mp4_mux import mux_h264_annexb
+from ovannotators._internal.mp4_mux import _iter_nal_units, mux_h264_annexb
 
 _SC = b"\x00\x00\x00\x01"
 _SC3 = b"\x00\x00\x01"
@@ -116,3 +117,63 @@ def test_mux_no_coded_frames_raises():
     stream = _SC + _SPS + _SC + _PPS
     with pytest.raises(ValueError, match="frames"):
         mux_h264_annexb(stream, fps=30, width=64, height=48)
+
+
+def _reference_nal_units(stream: bytes):
+    """Byte-at-a-time Annex-B scan: the behavior ``_iter_nal_units`` must keep."""
+    n = len(stream)
+    i = 0
+    starts: list[tuple[int, int]] = []
+    while i + 3 <= n:
+        if stream[i] == 0 and stream[i + 1] == 0:
+            if stream[i + 2] == 1:
+                starts.append((i, 3))
+                i += 3
+                continue
+            if i + 4 <= n and stream[i + 2] == 0 and stream[i + 3] == 1:
+                starts.append((i, 4))
+                i += 4
+                continue
+        i += 1
+    for idx, (pos, sc_len) in enumerate(starts):
+        nal_end = starts[idx + 1][0] if idx + 1 < len(starts) else n
+        nal = stream[pos + sc_len : nal_end]
+        if nal:
+            yield nal
+
+
+@pytest.mark.parametrize(
+    ("stream", "expected"),
+    [
+        pytest.param(_SC + _SPS + _SC + _PPS, [_SPS, _PPS], id="four-byte"),
+        pytest.param(_SC3 + _SPS + _SC3 + _PPS, [_SPS, _PPS], id="three-byte"),
+        pytest.param(
+            _SC + _SPS + _SC3 + _PPS + _SC + _IDR, [_SPS, _PPS, _IDR], id="mixed"
+        ),
+        pytest.param(b"\x00" * 5 + _SC3 + _SPS, [_SPS], id="leading-zero-run"),
+        pytest.param(_SC + _SC3 + _SPS, [_SPS], id="empty-nal-skipped"),
+        pytest.param(b"\x00\x00\x00", [], id="zeros-only"),
+        pytest.param(b"", [], id="empty"),
+    ],
+)
+def test_iter_nal_units_start_code_forms(stream, expected):
+    assert list(_iter_nal_units(stream)) == expected
+
+
+def test_iter_nal_units_extra_zero_byte_stays_in_previous_nal():
+    # A zero run longer than a 4-byte start code (``00 00 00 00 01``): the last
+    # four zeros-and-one bytes are the start code; the extra zero stays in the
+    # preceding NAL, as the original byte-at-a-time scan did.
+    stream = _SC + _SPS + b"\x00" + _SC + _PPS
+    assert list(_iter_nal_units(stream)) == [_SPS + b"\x00", _PPS]
+
+
+def test_iter_nal_units_matches_byte_scan_on_random_streams():
+    rng = random.Random(1234)
+    for _ in range(2000):
+        stream = bytes(
+            rng.choice((0, 0, 0, 1, 1, 2, 0x65)) for _ in range(rng.randint(0, 64))
+        )
+        assert list(_iter_nal_units(stream)) == list(_reference_nal_units(stream)), (
+            stream
+        )

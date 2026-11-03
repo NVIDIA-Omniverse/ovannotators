@@ -56,39 +56,49 @@ Treat the referenced `> **Source:**` snippets as the API source of truth.
 
 - Work in an ovannotators checkout where `tests/docs/python/test_custom_backend.py`
   exists; read the referenced snippet before writing code.
-- Know the backend protocol: `source/ovannotators/backends/_base.py`.
-- Study the closest built-in backend in `source/ovannotators/backends/`
-  (`disk.py` for the `write_array` encoding dispatch, `s3.py` for the lazy
-  optional-import pattern, `storage_api.py` for HTTP) before inventing a new
-  pattern.
+- Know the backend protocol: `src/ovannotators/backends/_base.py`.
+- Study the closest built-in backend in `src/ovannotators/backends/`
+  (`_encoding.py` for the shared `write_array` encoding dispatch, `disk.py`
+  for filesystem semantics, `s3.py` for the lazy
+  optional-import pattern, and `ovstorage.py` for
+  adapting an asynchronous SDK to the synchronous protocol) before inventing
+  a new pattern.
 
 ## Instructions
 
 1. Resolve the spec (see Inputs) and map the store's put/get/list operations
    onto the six `Backend` methods.
-2. Create one module `source/ovannotators/backends/<store>.py` with the NVIDIA
+2. Create one module `src/ovannotators/backends/<store>.py` with the NVIDIA
    Apache-2.0 SPDX header and Google-style docstrings.
 3. Add a `@dataclass <Store>BackendConfig` (endpoint, prefix, auth, options).
    > **Source:** `tests/docs/python/test_custom_backend.py` snippet `doc-backend-config`
 4. Implement the backend class with a class-level `name` and all six methods.
-   Reuse `write_array`'s encoding dispatch (`npy`/`png`/`jpg`/`exr`) from
-   `disk.py`, honor an `overwrite` guard, and raise `BackendWriteError` /
+   For a built-in backend, implement `write_array` as
+   `self.write(path, encode_array(path, array, encoding,
+   exr_compression=exr_compression))` using `backends/_encoding.py`
+   (`npy`/`png`/`jpg`/`exr`) with the signature
+   `write_array(path, array, encoding, *, exr_compression=None)`; honor an `overwrite` guard, and raise `BackendWriteError` /
    `BackendReadError` on failure. For third-party SDKs, import lazily and set a
    `_..._AVAILABLE` flag (mirror `s3.py`).
    > **Source:** `tests/docs/python/test_custom_backend.py` snippet `doc-backend-class`
 5. Register it: add the class to `_register_builtins()` in
-   `source/ovannotators/backends/_registry.py` (or use `@BackendRegistry.register`),
-   export it + its config from `source/ovannotators/backends/__init__.py` and the
-   top-level `source/ovannotators/__init__.py` `__all__`, and add an entry-point
+   `src/ovannotators/backends/_registry.py` (or use `@BackendRegistry.register`),
+   export it + its config from `src/ovannotators/backends/__init__.py` and the
+   top-level `src/ovannotators/__init__.py` `__all__`, and add an entry-point
    line (see Output Format).
 6. If the backend needs a new dependency, add an extra under
    `[project.optional-dependencies]` in `pyproject.toml` and fold it into the
    `all-*` extras.
 7. Add a CPU-only test next to the existing snippet tests (mock the SDK/HTTP
-   client like the S3/storage-api tests do), then run it.
+   client like the S3 tests do), then run it.
    > **Source:** `tests/docs/python/test_custom_backend.py` snippet `doc-backend-test`
 8. Document the new backend in `docs/public/api.rst` (config table + install
    extra).
+
+9. Add a `CHANGELOG.md` entry under the unreleased version's `### Added`,
+   naming the backend string and any new install extra a caller needs. A new
+   backend is user-visible by definition, so it belongs there; see the changelog
+   rule in [`AGENTS.md`](../../AGENTS.md).
 
 ## Retrieving the backend
 
@@ -145,7 +155,7 @@ Backend protocol methods to implement:
 | Method | Contract |
 |--------|----------|
 | `write(path, data)` | Persist raw bytes; honor the overwrite guard |
-| `write_array(path, array, encoding="npy")` | Encode (`npy`/`png`/`jpg`/`exr`) then `write`; reject unknown encodings |
+| `write_array(path, array, encoding="npy", *, exr_compression=None)` | Encode (`npy`/`png`/`jpg`/`exr`) then `write`; reject unknown encodings. `exr_compression` is an EXR scheme name (`None` = ZIP) that `BasicWriter` passes only when the user sets it: accept it, forward it for `exr`, and raise `ValueError` for any other encoding |
 | `read(path)` | Return bytes; raise `BackendReadError` if absent |
 | `list(prefix="")` | Sorted relative paths under `prefix` |
 | `exists(path)` | `bool` |
@@ -178,10 +188,32 @@ Backend protocol methods to implement:
 
 ## References
 
-- Backend protocol: `source/ovannotators/backends/_base.py`
-- Built-in backends: `source/ovannotators/backends/` (`disk.py`, `s3.py`,
-  `storage_api.py`)
-- Registry + built-in registration: `source/ovannotators/backends/_registry.py`
+- Backend protocol: `src/ovannotators/backends/_base.py`
+- Built-in backends: `src/ovannotators/backends/` (`disk.py`, `s3.py`,
+  `ovstorage.py`)
+- Registry + built-in registration: `src/ovannotators/backends/_registry.py`
 - Companion skill for output formats: `skills/new-writer/SKILL.md`
 - Keep skills, snippets, and `docs/public/api.rst` synchronized when the API
   changes.
+
+## WebDataset packaging composition
+
+WebDatasetPackager wraps an ordinary storage backend and accepts explicitly
+complete samples and episodes. It is not a Backend or an entry in
+BackendRegistry: arbitrary file writes cannot identify
+sample boundaries or deferred annotations. Use DatasetCapture, which packages
+each writer's output through a CaptureAdapter: built-in adapters are selected
+by exact writer type, and `adapter=` selects others. Existing writer and
+backend contracts are unchanged.
+
+> **Source:** `tests/docs/python/test_webdataset.py` snippet `doc-webdataset-capture`
+
+For finalized native output on local disk, `export_finalized_dataset(writer,
+episodes, packager)` applies the same adapter to one directory per episode and
+leaves the sources unchanged. A custom writer needs a `CaptureAdapter` passed as
+`adapter=`; see `skills/new-writer/SKILL.md`.
+
+Use SampleFiles and pack_episode for existing encoded data, including custom
+multimodal/episode samples. No training-reader dependency is needed at runtime.
+
+> **Source:** `tests/docs/python/test_webdataset.py` snippet `doc-webdataset-pack-files`

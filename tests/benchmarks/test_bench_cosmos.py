@@ -31,14 +31,12 @@ try:
 except ImportError:
     _HAS_PYNVVIDEOCODEC = False
 
+from ovannotators.writers._segmentation_palette import DistinctColorPalette
+from ovannotators.writers.canny import canny as _run_canny
 from ovannotators.writers.cosmos_transfer import (
     CosmosTransferWriter,
     CosmosTransferWriterConfig,
-    _SEG_PALETTE,
 )
-
-from ovannotators.writers.canny import canny as _run_canny
-
 
 # ---------------------------------------------------------------------------
 # Canny edge detection
@@ -56,13 +54,25 @@ class TestCannyPerformance:
         return rng.uniform(0, 1, size=(h, w))
 
     def test_canny_default_sigma(self, benchmark, gray_frame):
-        benchmark(
-            _run_canny, gray_frame, sigma=1.0, low_threshold=0.1, high_threshold=0.2
+        kwargs = {"sigma": 1.0, "low_threshold": 0.1, "high_threshold": 0.2}
+        _run_canny(gray_frame, **kwargs)
+        benchmark.pedantic(
+            _run_canny,
+            args=(gray_frame,),
+            kwargs=kwargs,
+            rounds=10,
+            iterations=1,
         )
 
     def test_canny_high_sigma(self, benchmark, gray_frame):
-        benchmark(
-            _run_canny, gray_frame, sigma=2.0, low_threshold=0.1, high_threshold=0.2
+        kwargs = {"sigma": 2.0, "low_threshold": 0.1, "high_threshold": 0.2}
+        _run_canny(gray_frame, **kwargs)
+        benchmark.pedantic(
+            _run_canny,
+            args=(gray_frame,),
+            kwargs=kwargs,
+            rounds=10,
+            iterations=1,
         )
 
 
@@ -81,18 +91,20 @@ class TestDepthColorization:
         rng = np.random.default_rng(42)
         return rng.uniform(0.1, 100.0, size=(h, w)).astype(np.float32)
 
-    def test_grayscale_colorize(self, benchmark, depth):
+    def test_colorize_depth_frames(self, benchmark, depth):
         """Benchmark depth → grayscale (luma) RGB colorization."""
+        writer = CosmosTransferWriter(
+            CosmosTransferWriterConfig(conditioning_types=["depth"])
+        )
+        writer._depth_frames = [depth]
+        result = writer._colorize_depth_frames()
+        assert result[0].shape == (*depth.shape, 3)
 
-        def colorize(d):
-            valid = np.isfinite(d)
-            dmin = d[valid].min() if valid.any() else 0.0
-            dmax = d[valid].max() if valid.any() else 1.0
-            normalized = np.clip((d - dmin) / (dmax - dmin + 1e-8), 0, 1)
-            indices = (normalized * 255).astype(np.uint8)
-            return np.repeat(indices[:, :, np.newaxis], 3, axis=2)
-
-        benchmark(colorize, depth)
+        benchmark.pedantic(
+            writer._colorize_depth_frames,
+            rounds=10,
+            iterations=1,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +113,7 @@ class TestDepthColorization:
 
 
 class TestSegColorization:
-    """Benchmark palette lookup for segmentation."""
+    """Benchmark distinct palette generation for segmentation."""
 
     @pytest.fixture(params=["720p", "1080p"], ids=lambda r: r)
     def seg(self, request) -> np.ndarray:
@@ -110,9 +122,25 @@ class TestSegColorization:
         rng = np.random.default_rng(42)
         return rng.integers(0, 50, size=(h, w), dtype=np.uint32)
 
-    def test_palette_lookup(self, benchmark, seg):
+    def test_assign_persistent_palette(self, benchmark, seg):
         """Benchmark seg ID → RGB via palette."""
-        benchmark(lambda s: _SEG_PALETTE[s], seg)
+        writer = CosmosTransferWriter(
+            CosmosTransferWriterConfig(conditioning_types=["segmentation"])
+        )
+        result = writer._seg_to_color(seg)
+        assert result.shape == (*seg.shape, 3)
+
+        benchmark.pedantic(
+            writer._seg_to_color,
+            args=(seg,),
+            rounds=10,
+            iterations=1,
+        )
+
+    @pytest.mark.parametrize("count", [1000, 5000])
+    def test_generate_distinct_colors(self, benchmark, count):
+        """Benchmark a fresh session palette at representative scales."""
+        benchmark(lambda: DistinctColorPalette().colors(count))
 
 
 # ---------------------------------------------------------------------------
@@ -124,28 +152,32 @@ class TestResize:
     """Benchmark Pillow-based frame resizing."""
 
     def test_resize_720p_to_1080p(self, benchmark):
-        from PIL import Image
-
         rng = np.random.default_rng(42)
         frame = rng.integers(0, 256, size=(720, 1280, 3), dtype=np.uint8)
+        writer = CosmosTransferWriter()
+        result = writer._resize_frame(frame, 1920, 1080)
+        assert result.shape == (1080, 1920, 3)
 
-        def resize(f):
-            img = Image.fromarray(f)
-            return np.asarray(img.resize((1920, 1080), Image.BILINEAR))
-
-        benchmark(resize, frame)
+        benchmark.pedantic(
+            writer._resize_frame,
+            args=(frame, 1920, 1080),
+            rounds=10,
+            iterations=1,
+        )
 
     def test_resize_1080p_to_720p(self, benchmark):
-        from PIL import Image
-
         rng = np.random.default_rng(42)
         frame = rng.integers(0, 256, size=(1080, 1920, 3), dtype=np.uint8)
+        writer = CosmosTransferWriter()
+        result = writer._resize_frame(frame, 1280, 720)
+        assert result.shape == (720, 1280, 3)
 
-        def resize(f):
-            img = Image.fromarray(f)
-            return np.asarray(img.resize((1280, 720), Image.BILINEAR))
-
-        benchmark(resize, frame)
+        benchmark.pedantic(
+            writer._resize_frame,
+            args=(frame, 1280, 720),
+            rounds=10,
+            iterations=1,
+        )
 
 
 # ---------------------------------------------------------------------------

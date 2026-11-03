@@ -54,18 +54,21 @@ def lidar_pointcloud() -> dict:
     import ovrtx
 
     from ovannotators.renderer_outputs.ovrtx import OvrtxOutput
+    from tests._ovstage_session import OvstageSession
 
-    # Motion BVH is required by the lidar sensor pipeline.
-    renderer = ovrtx.Renderer(ovrtx.RendererConfig(enable_motion_bvh=True))
-    renderer.open_usd(str(LIDAR_SCENE))
+    # Motion BVH is required by the lidar sensor pipeline. ovrtx 0.4 replaced
+    # the boolean ``enable_motion_bvh`` with the ``motion_bvh`` tri-state enum.
+    session = OvstageSession(
+        "lidar-pointcloud",
+        ovrtx.RendererConfig(motion_bvh=ovrtx.MotionBvh.ENABLE),
+    )
+    session.open_usd(LIDAR_SCENE)
 
     # Warm up the sensor before reading the point cloud frame.
     for _ in range(WARMUP_STEPS):
-        renderer.step(render_products={LIDAR_PRODUCT}, delta_time=STEP_DT_SECONDS)
+        session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
 
-    products = renderer.step(
-        render_products={LIDAR_PRODUCT}, delta_time=STEP_DT_SECONDS
-    )
+    products = session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
     frame = products[LIDAR_PRODUCT].frames[0]
     return OvrtxOutput().extract(frame, "PointCloud")
 

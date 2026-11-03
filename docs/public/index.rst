@@ -9,7 +9,7 @@ ovannotators
    :depth: 2
 
 
-What is ovannotators?
+What Is ovannotators?
 ---------------------
 
 .. include:: ../../README.md
@@ -43,7 +43,7 @@ Architecture
    └──────────────────────────────┘
        │
        ▼
-   Disk / S3 / Storage API
+   Disk / S3 / ovstorage
 
 Three layers:
 
@@ -58,7 +58,7 @@ Three layers:
    * - **Writer**
      - Converts arrays into a target dataset format (COCO, KITTI, YOLO, etc.)
    * - **Backend**
-     - Persists bytes to a storage destination (disk, S3, HTTP API)
+     - Persists bytes to a storage destination (disk, S3, ovstorage)
 
 You control the render loop yourself — call ``writer.write_frame()`` for each frame.
 
@@ -72,7 +72,8 @@ project uses (``pip``, ``uv``, ``poetry``, …). Examples below use ``pip``; the
 
 .. code-block:: bash
 
-   # Core (numpy, Pillow, openexr, warp-lang — enough for all writers on CPU)
+   # Core (numpy, Pillow, openexr, warp-lang — enough for the image and
+   # annotation writers on CPU)
    pip install ovannotators
 
    # GPU image codec (adds nvImageCodec; Warp ships in the core install).
@@ -104,7 +105,8 @@ Core dependencies (always installed): ``numpy``, ``Pillow``, ``openexr``, ``warp
    On a machine with an NVIDIA GPU, install the ``[gpu]`` extra
    (``pip install "ovannotators[gpu]"``). Image encoding then runs on the GPU
    via nvImageCodec — several times faster than the Pillow CPU fallback, and
-   zero-copy when frames are GPU-resident (e.g. ``OvrtxOutput(device="cuda")``).
+   zero-copy when frames are GPU-resident (e.g. ``OvrtxOutput().extract_all(frame)``, whose default ``device="cuda"``
+   keeps frames on the GPU).
    The codec is selected automatically; without the extra ovannotators falls
    back to Pillow on the CPU.
 
@@ -112,55 +114,73 @@ Core dependencies (always installed): ``numpy``, ``Pillow``, ``openexr``, ``warp
 Quick Start
 -----------
 
+Run both examples from the repository root. Start without a GPU; the second
+example adds the renderer.
+
+Without a GPU (CPU only)
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Writers accept NumPy arrays from any producer, so no renderer is needed. This
+example writes three frames of color, depth, and normals under
+``_out/quickstart_cpu``:
+
+.. literalinclude:: ../../examples/quickstart_cpu.py
+   :language: python
+   :start-at: import numpy
+
+Install with ``pip install ovannotators`` and run
+``python examples/quickstart_cpu.py``. Each frame directory holds
+``ldr_color.png``, ``distance_to_camera.exr``, ``normal.exr``, and colorized
+PNG previews of depth and normals.
+
+With an NVIDIA GPU (ovrtx and ovstage)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This example renders the bundled scene with ``ovrtx`` and writes COCO images
+and annotations under ``output/coco``. It needs an NVIDIA RTX-capable GPU,
+CUDA 12, ``ovrtx``, and ``ovstage``. ``ovstage`` installs from PyPI; the
+``ovrtx`` renderer wheels are published on NVIDIA's public package index:
+
+.. code-block:: bash
+
+   pip install ovannotators "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3" \
+       --extra-index-url https://pypi.nvidia.com/
+
+The application owns the stage; each population update is published before the
+renderer consumes it.
+
 .. literalinclude:: examples/quickstart.py
    :language: python
    :start-at: import ovrtx
 
-This snippet is executed verbatim by the test suite, so it always matches the
-current API. See :doc:`tutorials` for full walkthroughs and copy-paste snippets.
+The test suite executes the CPU example and executes the GPU example when
+``ovrtx`` is available. It adjusts only the GPU example's output path and frame
+count, so each executed example matches the current API. See :doc:`tutorials` for full walkthroughs and copy-paste snippets.
 
 
 Built-in Writers
 ----------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 15 20 10 55
+See :doc:`writers/index` for a comparison and a dedicated page for each
+documented built-in writer. The ``groot_lerobot_v2`` and ``umi_replay_buffer``
+profiles are described in :doc:`api`. Each page explains purpose, required inputs,
+output fields and data types, configuration, usage, and format limitations, with
+direct upstream references where available.
 
-   * - Writer
-     - Format
-     - GPU?
-     - Use case
-   * - ``basic``
-     - Flat per-annotator layout
-     - No
-     - Quick inspection, debugging
-   * - ``coco``
-     - MS-COCO JSON + images
-     - No
-     - 2D detection, segmentation
-   * - ``kitti``
-     - KITTI txt + images
-     - No
-     - Autonomous driving detection
-   * - ``yolo``
-     - YOLO txt + images
-     - No
-     - Real-time detection training
-   * - ``bop``
-     - BOP challenge format
-     - No
-     - 6DoF pose estimation
-   * - ``lerobot``
-     - LeRobot Parquet + video
-     - Yes¹
-     - Robot learning, imitation learning
-   * - ``cosmos_transfer``
-     - Cosmos Transfer 2.5 video
-     - Yes¹
-     - World model training
+FiftyOne Interoperability
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-¹ Video writers require GPU with PyNvVideoCodec (NVENC). GPU Canny (Warp) is optional for Cosmos Transfer.
+The COCO, KITTI, and YOLO outputs above are importable through FiftyOne's
+``COCODetectionDataset``, ``KITTIDetectionDataset``, and ``YOLOv5Dataset``
+types. The layouts need explicit import arguments: pass ``data_path`` and
+``labels_path`` for COCO and KITTI; pass ``yaml_path="data.yaml"`` and the
+desired ``split`` for YOLO. The import calls and label assertions are exercised
+by ``tests/test_fiftyone_interop.py`` in the separate FiftyOne CI job.
+
+FiftyOne's ``FiftyOneDataset`` type is a serialized snapshot of a FiftyOne
+dataset. After importing a standard output, FiftyOne can export that snapshot
+itself. The writers keep their format-specific output usable by training tools
+without requiring FiftyOne at capture time.
 
 
 Built-in Backends
@@ -179,9 +199,9 @@ Built-in Backends
    * - ``s3``
      - Amazon S3 / compatible
      - ``[s3]``
-   * - ``storage_api``
-     - HTTP storage API
-     - ``[storage-api]``
+   * - ``ovstorage``
+     - ovstorage Stack routes
+     - ``[ovstorage]``
 
 
 Render Variable Keys
@@ -240,23 +260,25 @@ You are responsible for mapping renderer output names to these keys.
    * - ``Motion2d``
      - float32 (H, W, 4)
      - 2D motion vectors
-   * - ``GenericModelOutput``
+   * - ``PointCloud``
      - varies
-     - Custom model output (written as NPZ)
+     - Composite lidar/radar output (written as NPZ, one member per tensor)
 
 .. note::
 
    Render variable keys use CamelCase (e.g. ``LdrColor``, ``DistanceToCameraSD``)
-   matching the ovrtx render variable naming convention. These are accessed via
-   ``frame.render_vars["LdrColor"]`` etc. Output **filenames** are converted
-   to lowercase snake_case by the BasicWriter (e.g. ``ldr_color.png``,
-   ``distance_to_camera.exr``).
+   matching the ovrtx ``sourceName`` convention. Use
+   ``OvrtxOutput.extract(frame, "LdrColor")`` to resolve these names from an
+   ovrtx frame. Starting with ovrtx 0.5, direct access through
+   ``frame.render_vars`` requires the full authored RenderVar prim path. Output
+   **filenames** are converted to lowercase snake_case by the BasicWriter (e.g.
+   ``ldr_color.png``, ``distance_to_camera.exr``).
 
 
 Requirements
 ------------
 
-- Python 3.10+
+- Python 3.11+
 - NumPy, Pillow, openexr, warp-lang (installed automatically)
 - No NVIDIA runtime required for core functionality (Warp runs on CPU when no GPU is present)
 - GPU extras require CUDA 12.x + compatible driver
@@ -274,7 +296,9 @@ Apache 2.0 — see ``LICENSE``.
    :hidden:
 
    self
+   writers/index
    render_outputs
    api
    tutorials
+   troubleshooting
    agent-skills

@@ -37,12 +37,13 @@ import sys
 from pathlib import Path
 
 # Allow running from repo root without install
-sys.path.insert(0, str(Path(__file__).parent.parent / "source"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import numpy as np
 import ovrtx
 
 from ovannotators.backends.disk import DiskBackend, DiskBackendConfig
+from tests._ovstage_session import OvstageSession, render_vars_by_source_name
 from ovannotators.writers.basic import BasicWriter, BasicWriterConfig
 from ovannotators.writers.bop import BOPWriter, BOPWriterConfig
 from ovannotators.writers.coco import COCOWriter, COCOWriterConfig
@@ -75,47 +76,50 @@ OBJECT_LABELS = ["cone", "cube", "cube", "sphere", "plane"]
 def extract_render_vars(frame: ovrtx.FrameOutput) -> dict:
     """Extract numpy arrays from an ovrtx FrameOutput."""
     render_vars = {}
+    # ovrtx 0.5 keys frame.render_vars by full RenderVar prim path, so address
+    # the frame's vars by sourceName through this mapping instead.
+    frame_vars = render_vars_by_source_name(frame)
 
     # LdrColor: RGBA uint8 -> RGB uint8 (drop alpha)
-    with frame.render_vars[RV_LDR_COLOR].map(device=ovrtx.Device.CPU) as rv:
+    with frame_vars[RV_LDR_COLOR].map(device=ovrtx.Device.CPU) as rv:
         ldr_rgba = np.from_dlpack(rv).copy()
     render_vars["LdrColor"] = ldr_rgba[:, :, :3]
 
     # HdrColor: RGBA float16 (keep all 4 channels for EXR)
-    if "HdrColor" in frame.render_vars:
-        with frame.render_vars["HdrColor"].map(device=ovrtx.Device.CPU) as rv:
+    if "HdrColor" in frame_vars:
+        with frame_vars["HdrColor"].map(device=ovrtx.Device.CPU) as rv:
             hdr = np.from_dlpack(rv).copy()
         render_vars["HdrColor"] = hdr
 
     # Depth: float32 -> 2D
-    with frame.render_vars[RV_DEPTH].map(device=ovrtx.Device.CPU) as rv:
+    with frame_vars[RV_DEPTH].map(device=ovrtx.Device.CPU) as rv:
         depth = np.from_dlpack(rv).copy()
     if depth.ndim == 3:
         depth = depth[:, :, 0]
     render_vars["DistanceToCameraSD"] = depth
 
     # Normals: float32 -> RGB (drop alpha)
-    with frame.render_vars[RV_NORMALS].map(device=ovrtx.Device.CPU) as rv:
+    with frame_vars[RV_NORMALS].map(device=ovrtx.Device.CPU) as rv:
         normals = np.from_dlpack(rv).copy()
     render_vars["NormalSD"] = normals[:, :, :3]
 
     # Instance segmentation: uint32 -> 2D
-    with frame.render_vars[RV_INST_SEG].map(device=ovrtx.Device.CPU) as rv:
+    with frame_vars[RV_INST_SEG].map(device=ovrtx.Device.CPU) as rv:
         inst_seg = np.from_dlpack(rv).copy()
     if inst_seg.ndim == 3:
         inst_seg = inst_seg[:, :, 0]
     render_vars["SemanticInstanceSegmentation"] = inst_seg
 
     # Semantic segmentation: uint32 -> 2D
-    with frame.render_vars[RV_SEM_SEG].map(device=ovrtx.Device.CPU) as rv:
+    with frame_vars[RV_SEM_SEG].map(device=ovrtx.Device.CPU) as rv:
         sem_seg = np.from_dlpack(rv).copy()
     if sem_seg.ndim == 3:
         sem_seg = sem_seg[:, :, 0]
     render_vars["SemanticSegmentation"] = sem_seg
 
     # DiffuseAlbedoSD: uint8 RGBA -> RGB (drop alpha)
-    if "DiffuseAlbedoSD" in frame.render_vars:
-        with frame.render_vars["DiffuseAlbedoSD"].map(device=ovrtx.Device.CPU) as rv:
+    if "DiffuseAlbedoSD" in frame_vars:
+        with frame_vars["DiffuseAlbedoSD"].map(device=ovrtx.Device.CPU) as rv:
             albedo = np.from_dlpack(rv).copy()
         if albedo.ndim == 3 and albedo.shape[2] == 4:
             albedo = albedo[:, :, :3]
@@ -123,17 +127,15 @@ def extract_render_vars(frame: ovrtx.FrameOutput) -> dict:
             render_vars["DiffuseAlbedoSD"] = albedo
 
     # Camera3dPositionSD: float32
-    if "Camera3dPositionSD" in frame.render_vars:
-        with frame.render_vars["Camera3dPositionSD"].map(device=ovrtx.Device.CPU) as rv:
+    if "Camera3dPositionSD" in frame_vars:
+        with frame_vars["Camera3dPositionSD"].map(device=ovrtx.Device.CPU) as rv:
             cam_pos = np.from_dlpack(rv).copy()
         if cam_pos.size > 0 and cam_pos.shape[0] > 1:
             render_vars["Camera3dPositionSD"] = cam_pos
 
     # DistanceToImagePlaneSD: float32 -> 2D
-    if "DistanceToImagePlaneSD" in frame.render_vars:
-        with frame.render_vars["DistanceToImagePlaneSD"].map(
-            device=ovrtx.Device.CPU
-        ) as rv:
+    if "DistanceToImagePlaneSD" in frame_vars:
+        with frame_vars["DistanceToImagePlaneSD"].map(device=ovrtx.Device.CPU) as rv:
             dist_plane = np.from_dlpack(rv).copy()
         if dist_plane.ndim == 3:
             dist_plane = dist_plane[:, :, 0]
@@ -291,20 +293,20 @@ def main() -> None:
     print(f"Output: {output_dir}")
     print(f"Settle steps: {args.settle_steps}")
 
-    # Initialize ovrtx renderer
-    renderer = ovrtx.Renderer()
-    renderer.open_usd(scene_path)
+    # Initialize the ovstage-backed renderer session
+    session = OvstageSession("generate-golden")
+    session.open_usd(scene_path)
 
     # Settle: let path tracer converge
     print(f"Settling renderer ({args.settle_steps} steps)...")
     for _ in range(args.settle_steps):
-        renderer.step({RENDER_PRODUCT}, 1.0 / 24.0)
+        session.step({RENDER_PRODUCT}, 1.0 / 24.0)
 
     # Render NUM_FRAMES
     print(f"Rendering {NUM_FRAMES} frames...")
     all_frames = []
     for frame_id in range(NUM_FRAMES):
-        outputs = renderer.step({RENDER_PRODUCT}, 1.0 / 24.0)
+        outputs = session.step({RENDER_PRODUCT}, 1.0 / 24.0)
         prod = outputs[RENDER_PRODUCT]
         frame = prod.frames[0]
         render_vars = extract_render_vars(frame)

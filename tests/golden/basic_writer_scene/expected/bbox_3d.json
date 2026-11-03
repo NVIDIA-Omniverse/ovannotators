@@ -12,6 +12,40 @@
     ],
     "rotation": [
       [
+        0.8660253882408142,
+        0.0,
+        0.5
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        -0.5,
+        0.0,
+        0.8660253882408142
+      ]
+    ],
+    "semantic_id": 2,
+    "instance_id": 3826580222,
+    "label": "sphere",
+    "coordinate_system": "world",
+    "prim_path": "/Replicator/Sphere_Xform/Sphere"
+  },
+  {
+    "center": [
+      0.0,
+      -0.0002498626708984375,
+      0.0
+    ],
+    "extent": [
+      50.0,
+      49.99974822998047,
+      50.0
+    ],
+    "rotation": [
+      [
         1.0,
         0.0,
         0.0
@@ -28,6 +62,40 @@
       ]
     ],
     "semantic_id": 3,
+    "instance_id": 2862958192,
+    "label": "cone",
+    "coordinate_system": "world",
+    "prim_path": "/Replicator/Cone_Xform/Cone"
+  },
+  {
+    "center": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "extent": [
+      50.0,
+      50.0,
+      50.0
+    ],
+    "rotation": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "semantic_id": 4,
     "instance_id": 1378685019,
     "label": "cube",
     "coordinate_system": "world",
@@ -61,78 +129,10 @@
         0.8660253882408142
       ]
     ],
-    "semantic_id": 3,
+    "semantic_id": 4,
     "instance_id": 2399567550,
     "label": "cube",
     "coordinate_system": "world",
     "prim_path": "/Replicator/Cube_Xform_01/Cube"
-  },
-  {
-    "center": [
-      0.0,
-      0.0,
-      0.0
-    ],
-    "extent": [
-      50.0,
-      50.0,
-      50.0
-    ],
-    "rotation": [
-      [
-        0.8660253882408142,
-        0.0,
-        0.5
-      ],
-      [
-        0.0,
-        1.0,
-        0.0
-      ],
-      [
-        -0.5,
-        0.0,
-        0.8660253882408142
-      ]
-    ],
-    "semantic_id": 4,
-    "instance_id": 3826580222,
-    "label": "sphere",
-    "coordinate_system": "world",
-    "prim_path": "/Replicator/Sphere_Xform/Sphere"
-  },
-  {
-    "center": [
-      0.0,
-      -0.0002498626708984375,
-      0.0
-    ],
-    "extent": [
-      50.0,
-      49.9997501373291,
-      50.0
-    ],
-    "rotation": [
-      [
-        1.0,
-        0.0,
-        0.0
-      ],
-      [
-        0.0,
-        1.0,
-        0.0
-      ],
-      [
-        0.0,
-        0.0,
-        1.0
-      ]
-    ],
-    "semantic_id": 5,
-    "instance_id": 2862958192,
-    "label": "cone",
-    "coordinate_system": "world",
-    "prim_path": "/Replicator/Cone_Xform/Cone"
   }
 ]

@@ -2,105 +2,74 @@
 SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 SPDX-License-Identifier: Apache-2.0
 -->
-# ovannotators Skills Directory
+# ovannotators Agent Skills
 
-This directory contains structured skill files for AI coding agents (Cursor,
-Claude Code, etc.) working on the `ovannotators` codebase. Each skill is a
-self-contained guide for one ovannotators task. The format follows the
+Use this catalog to select the task-specific workflow before changing the
+repository. Each skill is self-contained and follows the
 [Agent Skills specification](https://agentskills.io/specification).
 
-## Structure
+## Complete Catalog
 
-Each subdirectory contains a single `SKILL.md` file:
+| Skill | Use it for |
+| --- | --- |
+| [`gpu-verification`](gpu-verification/SKILL.md) | Run renderer, CUDA, NVENC, and GPU-gated validation that CPU CI cannot cover. |
+| [`new-backend`](new-backend/SKILL.md) | Add, implement, or debug a storage backend and its registration. |
+| [`new-writer`](new-writer/SKILL.md) | Add, implement, or debug a dataset-format writer and its registration. |
+| [`test-classification`](test-classification/SKILL.md) | Choose pytest taxonomy markers and the correct CI or GPU lane. |
+| [`test-coverage`](test-coverage/SKILL.md) | Run coverage checks, interpret reports, and investigate changed-file gaps. |
+| [`test-creation`](test-creation/SKILL.md) | Create or update meaningful tests using repository conventions. |
+| [`test-triage`](test-triage/SKILL.md) | Diagnose test or CI failures and choose the appropriate response. |
 
-```
-skills/
-  new-writer/SKILL.md      # Add an output-format writer
-  new-backend/SKILL.md     # Add a storage backend
-  README.md                # This file
-```
+`skills/` is the single source of truth. `.agents/skills` and `.claude/skills`
+are read-only aliases for agent runtimes; never edit the aliases directly.
 
-The same tree is exposed read-only to other agent runtimes via symlinks at the
-repo root: `.agents/skills -> ../skills` and `.claude/skills -> ../skills`.
-`skills/` is the single source of truth; never edit the mirrors directly.
+For connection setup, authentication, reads, writes, and route diagnosis in the
+underlying storage client, see the [ovstorage skills catalog](https://github.com/NVIDIA-Omniverse/ovstorage/tree/main/skills).
 
-## SKILL.md Format
+## Skill Structure
 
-```markdown
----
-name: skill-name                 # matches the directory name
-description: >
-  What this skill covers. Use when [trigger phrases].
-license: Apache-2.0
-version: "0.1.0"
-author: NVIDIA ovannotators
-tags:
-  - ovannotators
-  - topic
-tools:
-  - Read
-  - Grep
----
+Each kebab-case subdirectory contains one `SKILL.md`. Its YAML frontmatter
+names the skill, describes activation conditions, and may declare metadata and
+tools. The body defines inputs, prerequisites, instructions, validation,
+limitations, troubleshooting, and references as needed by that workflow.
 
-# Skill Title
+## Tested Code References
 
-## When to Use         Activation conditions and trigger phrases.
-## Inputs              Spec resolution (URL/file/prompt) and what to gather.
-## Prerequisites       Repo/API assumptions before following the skill.
-## Instructions        Numbered, agent-directed steps.
-## Output Format       Expected response or implementation summary.
-## Scripts             Executable helpers (or "none").
-## Key Types / Functions   Quick reference of the API surface involved.
-## Limitations         Known constraints.
-## Troubleshooting     Gotchas to watch for.
-## References          Related skills and source-of-truth conventions.
+Skills reference live, tested code instead of copying substantial API examples.
+Test code is the source of truth.
+
+Put illustrative regions under `tests/docs/python/` between matching markers:
+
+```text
+# [snippet:doc-example-name]
+illustrative code
+# [/snippet:doc-example-name]
 ```
 
-## Code Snippet References
+Names must be unique, kebab-case, and prefixed with `doc-`. A skill points to a
+region with this directive:
 
-Skills reference live, tested code instead of duplicating snippets inline, so
-examples stay accurate as the API evolves. Test code is the single source of
-truth; skills reference it -- never the other way around.
-
-### Marker format in test files
-
-Wrap illustrative code under `tests/docs/python/` in markers:
-
-```python
-# [snippet:doc-writer-class]
-class ManifestWriter:
-    ...
-# [/snippet:doc-writer-class]
+```text
+> **Source:** `tests/docs/python/test_example.py` snippet `doc-example-name`
 ```
 
-Snippet names are kebab-case, prefixed with `doc-`, and unique across the
-`tests/docs/` tree.
+Small fragments such as a one-line import or entry-point declaration may stay
+inline. `tests/test_skill_snippets.py` verifies every source reference and both
+runtime aliases.
 
-### Reference format in SKILL.md
+## Add a Skill
 
-Replace inline code blocks with a blockquote directive:
+1. Write and test the illustrative snippet under `tests/docs/python/`; add its
+   markers and update `tests/docs/AGENTS.md`.
+2. Create `skills/<skill-name>/SKILL.md` with a frontmatter `name` that matches
+   the directory.
+3. Describe activation conditions, required context, implementation steps,
+   output, validation, limitations, and troubleshooting.
+4. Reference tested snippets instead of duplicating API examples.
+5. Add the skill to the complete catalog above and run
+   `uv run pytest tests/test_skill_snippets.py`.
 
-```markdown
-> **Source:** `tests/docs/python/test_custom_writer.py` snippet `doc-writer-class`
-```
+## Update a Skill
 
-Agents read the referenced file between the `# [snippet:name]` and
-`# [/snippet:name]` markers to get the current code. Small fragments (a one-line
-`pyproject.toml` entry-point, an import) may stay inline -- don't over-engineer.
-
-## Adding a New Skill
-
-1. **Write the tested snippets first** under `tests/docs/python/`, wrapping each
-   illustrative region in `doc-*` snippet markers, and update the inventory in
-   `tests/docs/AGENTS.md`.
-2. Create a directory under `skills/` named in kebab-case; set the `SKILL.md`
-   `name` to match.
-3. Write `SKILL.md` following the format above. **Do not write inline code
-   blocks for API usage** -- reference the test snippets via `> **Source:**`.
-4. `tests/test_skill_snippets.py` enforces that every `> **Source:**` reference
-   resolves and that the `.agents`/`.claude` mirrors point at `skills/`.
-
-## Updating Skills
-
-When you change the ovannotators API in a way that affects a skill, update the
-tested snippet and the corresponding `SKILL.md` in the same change.
+When an API change affects a skill, update the tested snippet and the skill in
+the same change. Run the focused snippet tests before the default suite.

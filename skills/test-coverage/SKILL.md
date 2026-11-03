@@ -12,19 +12,19 @@ Use this when asked to run coverage, explain a coverage failure, or identify mis
 Default CI-style coverage:
 
 ```bash
-python -m pytest --cov=source/ovannotators --cov-report=xml --cov-report=term-missing --cov-fail-under=90 -v
+python -m pytest --cov=src/ovannotators --cov-report=xml --cov-report=term-missing --cov-fail-under=90 -v
 ```
 
 Local quick report:
 
 ```bash
-python -m pytest --cov=source/ovannotators --cov-report=term-missing -q
+python -m pytest --cov=src/ovannotators --cov-report=term-missing -q
 ```
 
 HTML report when detailed inspection helps:
 
 ```bash
-python -m pytest --cov=source/ovannotators --cov-report=html
+python -m pytest --cov=src/ovannotators --cov-report=html
 ```
 
 ## What to inspect

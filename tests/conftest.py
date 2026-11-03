@@ -17,19 +17,19 @@
 
 from __future__ import annotations
 
-import gc
 import math
 import sys
 from pathlib import Path
 
 # Make the package importable without installation.
-sys.path.insert(0, str(Path(__file__).parent.parent / "source"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import numpy as np
 import pytest
 
 from ovannotators.backends.disk import DiskBackend, DiskBackendConfig
 from ovannotators._internal.optional_deps import ovrtx_available
+from tests.profile_fixtures import make_priority_profile_fixture
 from ovannotators.writers._helpers import (
     OVRTX_BBOX2D_DTYPE,
     OVRTX_BBOX3D_DTYPE,
@@ -38,6 +38,9 @@ from ovannotators.writers._helpers import (
     decode_bbox_3d,
     decode_camera_params,
 )
+
+# Rewrite asserts in the shared WebDataset matrix inherited by adapter tests.
+pytest.register_assert_rewrite("tests.webdataset_matrix")
 
 # Canonical labels shared by the bbox arrays and the SemanticIdMap buffer.
 SAMPLE_SEMANTIC_LABELS: dict[int, str] = {1: "car", 2: "person"}
@@ -183,6 +186,12 @@ def disk_backend(tmp_path: Path) -> DiskBackend:
     return DiskBackend(DiskBackendConfig(root_dir=tmp_path, overwrite=True))
 
 
+@pytest.fixture
+def priority_profile_fixture():
+    """Return the deterministic shared fixture for exact profile tests."""
+    return make_priority_profile_fixture()
+
+
 def _own_extracted(extracted: object, decoder: object) -> object:
     """Copy an extracted render var into renderer-independent host memory.
 
@@ -232,26 +241,19 @@ def rendered_scene_vars() -> dict:
     if not _OVRTX_AVAILABLE:
         pytest.skip("ovrtx not installed — skipping GPU render tests")
 
-    import ovrtx
-
     from ovannotators.renderer_outputs.ovrtx import OvrtxOutput
+    from tests._ovstage_session import OvstageSession
 
     usda = TEST_SCENE_USDA.read_text()
-    renderer = ovrtx.Renderer()
+    session = OvstageSession("rendered-scene-vars")
     try:
-        renderer.open_usd_from_string(usda)
+        session.open_usd_from_string(usda)
 
         # RT2 warmup: allow texture streaming and sample accumulation to settle.
         for _ in range(WARMUP_FRAMES):
-            renderer.step(
-                render_products={ALL_ANNOTATORS_PRODUCT},
-                delta_time=1 / 60,
-            )
+            session.step({ALL_ANNOTATORS_PRODUCT}, 1 / 60)
 
-        products = renderer.step(
-            render_products={ALL_ANNOTATORS_PRODUCT},
-            delta_time=1 / 60,
-        )
+        products = session.step({ALL_ANNOTATORS_PRODUCT}, 1 / 60)
 
         output = OvrtxOutput()
         render_vars: dict = {}
@@ -261,10 +263,9 @@ def rendered_scene_vars() -> dict:
                     try:
                         extracted = output.extract(frame, source_name)
                     except Exception:
-                        # Some vars (e.g. GenericModelOutput / point clouds) are
-                        # lidar/radar sensor outputs that produce no buffer on a
-                        # camera product. Tolerate absent payloads per the scene
-                        # plan.
+                        # Some vars (e.g. PointCloud) are lidar/radar sensor
+                        # outputs that produce no buffer on a camera product.
+                        # Tolerate absent payloads per the scene plan.
                         continue
                     decoder = _ANNOTATOR_DECODERS.get(source_name)
                     # Copy into owned host memory before the renderer is torn
@@ -280,12 +281,11 @@ def rendered_scene_vars() -> dict:
             break
         del products
     finally:
-        # Destroy the renderer deterministically while the interpreter is fully
+        # Detach and destroy deterministically while the interpreter is fully
         # alive, instead of leaving it to interpreter-shutdown GC (which races
         # ovrtx/omni atexit teardown and can hang). All extracted data is owned
         # above, so there are no live mappings to leak.
-        del renderer
-        gc.collect()
+        session.close()
     return render_vars
 
 

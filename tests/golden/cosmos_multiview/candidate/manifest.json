@@ -1,0 +1,26 @@
+{
+  "episode_ids": [
+    "bdb1af43-2d9c-5543-a241-26cd53a922d5",
+    "f02e57a3-7adf-5b65-a00d-7da3fdf17c94",
+    "0f7ad46c-5702-572a-8d42-4d3a4f18de59"
+  ],
+  "sample_ids": [
+    "3491430f-0645-5e0c-8de4-25ed7f35c28b",
+    "39cd2aa2-86d4-556e-a51f-10a2940bc884",
+    "3ed30c5e-43b2-5087-932d-a9f4aa92da7c",
+    "51fc3354-fbba-5175-9f76-0e7d2d26fa38",
+    "697bbdb9-4f13-5833-8c27-5bb7d9e43aef",
+    "79ea5c93-b3c5-5609-be6e-4034a637f5a1",
+    "860dc965-990c-5a7d-832c-74c5f967430d",
+    "8dd78ae7-4486-5b81-93c8-6dbf713c7022",
+    "8e07070b-7aae-5c59-8c5b-0d0ca984624a",
+    "914e80a4-0a21-5bb7-8969-0ce4649f0f20",
+    "92034aa1-f064-5e78-bbb0-3e61967a7194",
+    "d736bb6e-00f0-599a-9832-30dbc5f8444d"
+  ],
+  "source_episode_ids": [
+    "episode-000",
+    "episode-001",
+    "episode-002"
+  ]
+}

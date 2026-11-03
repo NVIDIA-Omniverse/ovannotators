@@ -13,22 +13,22 @@
   "categories": [
     {
       "id": 1,
-      "name": "plane",
-      "supercategory": ""
-    },
-    {
-      "id": 2,
-      "name": "cube",
-      "supercategory": ""
-    },
-    {
-      "id": 3,
       "name": "sphere",
       "supercategory": ""
     },
     {
-      "id": 4,
+      "id": 2,
       "name": "cone",
+      "supercategory": ""
+    },
+    {
+      "id": 3,
+      "name": "cube",
+      "supercategory": ""
+    },
+    {
+      "id": 4,
+      "name": "plane",
       "supercategory": ""
     }
   ],
@@ -47,12 +47,12 @@
       "image_id": 1,
       "category_id": 1,
       "bbox": [
-        0.0,
-        0.0,
-        1279.0,
-        719.0
+        361.0,
+        196.0,
+        124.0,
+        124.0
       ],
-      "area": 919601.0,
+      "area": 15376.0,
       "iscrowd": 0,
       "segmentation": []
     },
@@ -60,6 +60,20 @@
       "id": 2,
       "image_id": 1,
       "category_id": 2,
+      "bbox": [
+        578.0,
+        307.0,
+        123.0,
+        142.0
+      ],
+      "area": 17466.0,
+      "iscrowd": 0,
+      "segmentation": []
+    },
+    {
+      "id": 3,
+      "image_id": 1,
+      "category_id": 3,
       "bbox": [
         767.0,
         272.0,
@@ -71,9 +85,9 @@
       "segmentation": []
     },
     {
-      "id": 3,
+      "id": 4,
       "image_id": 1,
-      "category_id": 2,
+      "category_id": 3,
       "bbox": [
         783.0,
         130.0,
@@ -85,30 +99,16 @@
       "segmentation": []
     },
     {
-      "id": 4,
-      "image_id": 1,
-      "category_id": 3,
-      "bbox": [
-        361.0,
-        196.0,
-        124.0,
-        124.0
-      ],
-      "area": 15376.0,
-      "iscrowd": 0,
-      "segmentation": []
-    },
-    {
       "id": 5,
       "image_id": 1,
       "category_id": 4,
       "bbox": [
-        578.0,
-        307.0,
-        123.0,
-        142.0
+        0.0,
+        0.0,
+        1279.0,
+        719.0
       ],
-      "area": 17466.0,
+      "area": 919601.0,
       "iscrowd": 0,
       "segmentation": []
     }

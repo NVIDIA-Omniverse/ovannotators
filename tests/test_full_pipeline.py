@@ -113,14 +113,18 @@ def _render_frame(renderer):
     """Render one frame and extract render vars."""
     import ovrtx as _ovrtx
 
+    from tests._ovstage_session import render_vars_by_source_name
+
     outputs = renderer.step({RENDER_PRODUCT}, 1.0 / 24.0)
     prod = outputs[RENDER_PRODUCT]
     frame = prod.frames[0]
 
     render_vars = {}
 
-    # Extract all available render vars as numpy arrays
-    for name, rv in frame.render_vars.items():
+    # Extract all available render vars as numpy arrays, keyed by AOV kind.
+    # ovrtx 0.5 keys frame.render_vars by full RenderVar prim path, which is not
+    # the name writers (or the assertions below) look up.
+    for name, rv in render_vars_by_source_name(frame).items():
         try:
             with rv.map(device=_ovrtx.Device.CPU) as mapped:
                 arr = np.from_dlpack(mapped).copy()
@@ -152,16 +156,22 @@ def _render_frame(renderer):
 
 @pytest.fixture(scope="module")
 def renderer():
-    """Create and settle the ovrtx renderer (shared across tests in module)."""
-    ovrtx = pytest.importorskip("ovrtx")
-    r = ovrtx.Renderer()
-    r.open_usd(str(SCENE_PATH.resolve()))
+    """Create and settle the ovstage-backed renderer (shared across module)."""
+    pytest.importorskip("ovrtx")
+    pytest.importorskip("ovstage")
+    from tests._ovstage_session import OvstageSession
 
-    # Settle path tracer
-    for _ in range(SETTLE_STEPS):
-        r.step({RENDER_PRODUCT}, 1.0 / 24.0)
+    session = OvstageSession("full-pipeline")
+    try:
+        session.open_usd(SCENE_PATH.resolve())
 
-    return r
+        # Settle path tracer
+        for _ in range(SETTLE_STEPS):
+            session.step({RENDER_PRODUCT}, 1.0 / 24.0)
+
+        yield session
+    finally:
+        session.close()
 
 
 @pytest.fixture(scope="module")
@@ -268,7 +278,9 @@ class TestWriterPipeline:
         frame_dir = tmp_path / "0000"
         assert frame_dir.exists()
         assert (frame_dir / "ldr_color.png").exists()
-        assert (frame_dir / "distance_to_camera.npy").exists()
+        # Depth vars follow BasicWriterConfig.depth_format, which defaults to
+        # "exr"; cfg above takes the defaults.
+        assert (frame_dir / "distance_to_camera.exr").exists()
 
         # Bbox JSON is decoded into a per-entry list (not a raw byte dump).
         if "SemanticBoundingBox2DTight" in basic_vars:

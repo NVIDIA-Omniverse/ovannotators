@@ -1,0 +1,63 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+  pre_merge_checks:
+    description:
+      mode: warning
+    issue_assessment:
+      mode: warning
+    docstrings:
+      mode: off
+    custom_checks:
+      - name: Repository boundary
+        mode: warning
+        instructions: >-
+          Flag any PR that adds renderer lifecycle, GPU readback, USD stage
+          ownership, scene construction, scene randomization, or a high-level
+          render loop to ovannotators. These concerns belong to the companion
+          libraries identified in AGENTS.md. A proposed boundary expansion
+          must link an accepted issue that explains why ovannotators is the
+          correct owner and states the intended public contract.
+      - name: Dependency admission
+        mode: warning
+        instructions: >-
+          When a PR adds a third-party runtime dependency, including an
+          optional extra, verify that its linked accepted issue and PR
+          description state the capability rationale, alternatives considered,
+          license/security and maintenance assessment, packaging choice,
+          supported-platform impact, and validation plan. Flag missing
+          evidence. Do not require this evidence for a dependency that is
+          removed or for an existing dependency version update with no new
+          runtime capability.
+
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: true
+    auto_planning:
+      enabled: true
+      labels:
+        - plan-ready
+  labeling:
+    auto_apply_labels: true
+    labeling_instructions:
+      - label: bug
+        instructions: >-
+          Reports of errors, crashes, regressions, incorrect results, or other
+          behavior that differs from the documented or expected behavior.
+      - label: enhancement
+        instructions: >-
+          Requests for new capabilities or improvements to existing
+          functionality, including usability and performance improvements.
+      - label: documentation
+        instructions: >-
+          Requests to add, correct, clarify, or update user-facing
+          documentation, examples, tutorials, or API reference material.

@@ -4,13 +4,19 @@
 """Quick Start: render a few frames and write a COCO dataset.
 
 This is the canonical capture flow used throughout the documentation: drive the
-USD animation timeline with ``update_from_usd_time``, advance the sensor
-simulation with a non-zero ``step(delta_time=...)``, and hand each frame to a
-writer via ``OvrtxOutput.extract_all``. It is executed verbatim by the test
-suite so it cannot drift from the public API.
+USD animation timeline with ``ovstage.population.update_from_usd_time``, advance
+the sensor simulation with a positive ``step(delta_time=...)``, and hand each
+frame to a writer via ``OvrtxOutput.extract_all``. The test suite executes it,
+with only the output path and frame count adjusted, so it cannot drift from the
+public API.
+
+The renderer does not open USD itself. It borrows an externally owned
+:class:`ovstage.Stage`, and ``ovstage.population`` drives what that stage
+contains.
 """
 
 import ovrtx
+import ovstage
 
 from ovannotators import (
     DiskBackend,
@@ -19,33 +25,44 @@ from ovannotators import (
     WriterRegistry,
 )
 
-# 1. Set up the backend (where bytes are persisted).
+# Set up the backend (where bytes are persisted).
 backend = DiskBackend(DiskBackendConfig(root_dir="./output/coco", overwrite=True))
 
-# 2. Get a writer by name from the registry and an AOV extractor.
-writer = WriterRegistry.get("coco")()
+# Create a writer by registry name and a render-variable extractor.
+writer = WriterRegistry.create("coco")
 extractor = OvrtxOutput()
 
-# 3. Open the scene and render. You control the loop:
-#    - update_from_usd_time advances the USD animation timeline so time-sampled
-#      transforms (moving objects, cameras) change between frames.
-#    - step()'s delta_time advances the sensor simulation and must be non-zero,
-#      otherwise consecutive frames sample identical stage state.
+# Register schemas before any USD access; the Renderer must exist before the
+# Stage it borrows.
+ovrtx.register_schema_paths()
 renderer = ovrtx.Renderer()
-renderer.open_usd("tests/data/test_scene.usda")
+stage = ovstage.Stage("quickstart")
+renderer.attach_ovstage(stage)
 render_product = "/Render/RenderProduct_001"
 
+# Use the first animation sample rather than USD Default time.
+ordinal = 1
+ovstage.population.open_usd(
+    stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+)
+stage.advance_write_floor(ordinal).wait()
+
+# USD time selects scene samples; a positive delta_time advances the sensor
+# simulation between frames.
 frame_id = 0
 num_frames = 3
 start_tc, end_tc = 0.0, 5.0
 for i in range(num_frames):
     usd_time = start_tc + (end_tc - start_tc) * i / (num_frames - 1)
-    renderer.update_from_usd_time(usd_time)
-    outputs = renderer.step({render_product}, delta_time=0.1)
+    ordinal += 1
+    ovstage.population.update_from_usd_time(stage, ordinal, usd_time)
+    # Publish the stage update before rendering at this ordinal.
+    stage.advance_write_floor(ordinal).wait()
+    outputs = renderer.step({render_product}, delta_time=0.1, ordinal=ordinal)
     product = outputs[render_product]
     for frame in product.frames:
         writer.write_frame(frame_id, extractor.extract_all(frame), backend)
         frame_id += 1
 
-# 4. Flush deferred data (COCO JSON is written here).
+# Flush deferred data (COCO JSON is written here).
 writer.finalize(backend)

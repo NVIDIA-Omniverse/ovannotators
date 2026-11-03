@@ -22,15 +22,18 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-
 from ovannotators.exceptions import MissingRenderVarError
+from ovannotators.writers._registry import WriterRegistry
+from ovannotators.writers._segmentation_palette import (
+    DistinctColorPalette,
+    SegmentationColorizer,
+    _simulate_accessibility_oklab,
+    _srgb_to_oklab,
+)
 from ovannotators.writers.cosmos_transfer import (
     CosmosTransferWriter,
     CosmosTransferWriterConfig,
-    _SEG_PALETTE,
 )
-from ovannotators.writers._registry import WriterRegistry
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -109,6 +112,9 @@ class TestConfig:
         assert cfg.conditioning_types == ["canny", "depth", "segmentation"]
         assert cfg.canny_source == "rgb"
         assert cfg.canny_sigma == 1.0
+        assert cfg.segmentation_palette_accessibility == "none"
+        assert cfg.segmentation_color_key == "instance_id"
+        assert cfg.segmentation_palette_path is None
 
     def test_custom(self):
         cfg = CosmosTransferWriterConfig(
@@ -120,24 +126,64 @@ class TestConfig:
         assert cfg.clip_index == 5
         assert cfg.conditioning_types == ["canny"]
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("segmentation_palette_accessibility", "achromatopsia"),
+            ("segmentation_color_key", "prim_path"),
+        ],
+    )
+    def test_invalid_segmentation_palette_options(self, field, value):
+        with pytest.raises(ValueError, match=field):
+            CosmosTransferWriterConfig(**{field: value})
 
-# ---------------------------------------------------------------------------
-# LUT generation
-# ---------------------------------------------------------------------------
+    def test_legacy_segmentation_palette_option_is_removed(self):
+        with pytest.raises(TypeError, match="segmentation_palette"):
+            CosmosTransferWriterConfig(segmentation_palette="legacy")
+
+    @pytest.mark.parametrize(
+        ("color_key", "render_var"),
+        [
+            ("instance_id", "SemanticInstanceSegmentation"),
+            ("stable_id", "StableIdSegmentation"),
+            ("semantic_id", "SemanticSegmentation"),
+            ("semantic_label", "SemanticSegmentation"),
+        ],
+    )
+    def test_color_key_selects_required_segmentation_var(self, color_key, render_var):
+        writer = CosmosTransferWriter(
+            CosmosTransferWriterConfig(segmentation_color_key=color_key)
+        )
+
+        assert render_var in writer.required_render_vars
+        assert (
+            len(
+                writer.required_render_vars
+                & {
+                    "SemanticInstanceSegmentation",
+                    "StableIdSegmentation",
+                    "SemanticSegmentation",
+                }
+            )
+            == 1
+        )
 
 
-class TestLUTs:
-    def test_seg_palette_shape(self):
-        assert _SEG_PALETTE.shape == (256, 3)
-        assert _SEG_PALETTE.dtype == np.uint8
+class TestConstructorValidation:
+    def test_unknown_conditioning_type_raises(self):
+        cfg = CosmosTransferWriterConfig(conditioning_types=["canny", "bogus"])
+        with pytest.raises(ValueError, match="conditioning_types"):
+            CosmosTransferWriter(cfg)
 
-    def test_seg_palette_background_black(self):
-        np.testing.assert_array_equal(_SEG_PALETTE[0], [0, 0, 0])
+    def test_unsupported_canny_source_raises(self):
+        cfg = CosmosTransferWriterConfig(canny_source="bogus")  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="canny_source"):
+            CosmosTransferWriter(cfg)
 
-    def test_seg_palette_nonzero_entries(self):
-        # All non-zero indices should have non-zero colors
-        for i in range(1, 256):
-            assert _SEG_PALETTE[i].sum() > 0
+    def test_valid_config_narrows_required_vars(self):
+        cfg = CosmosTransferWriterConfig(conditioning_types=["canny"])
+        writer = CosmosTransferWriter(cfg)
+        assert writer.required_render_vars == frozenset({"LdrColor"})
 
 
 # ---------------------------------------------------------------------------
@@ -733,3 +779,392 @@ class TestCosmosTransferGeometryGuards:
         writer._seg_frames = [np.arange(16, dtype=np.int32).reshape(4, 4, 1)]
         grays = writer._canny_source_gray_frames()
         assert grays[0].shape == (8, 8)
+
+
+@pytest.mark.parametrize("channels", [False, True])
+def test_seg_colors_survive_visibility_changes(channels):
+    """Disappearance, reappearance and new lower IDs preserve old colors."""
+    writer = CosmosTransferWriter()
+    frames = [
+        np.array([row], dtype=np.uint32)
+        for row in (
+            [0, 10, 2**32 - 1],
+            [0, 0, 2**32 - 1],
+            [5, 10, 2**32 - 1],
+            [0, 10, 2**32 - 1],
+        )
+    ]
+    writer._seg_frames = [f[..., None] if channels else f for f in frames]
+    colored = writer._colorize_seg_frames()
+    for frame in colored[1:]:
+        np.testing.assert_array_equal(frame[0, 2], colored[0][0, 2])
+    np.testing.assert_array_equal(colored[2][0, 1], colored[0][0, 1])
+    np.testing.assert_array_equal(colored[3], colored[0])
+    assert not colored[1][0, :2].any()
+    assert np.unique(colored[2].reshape(-1, 3), axis=0).shape[0] == 3
+
+
+def test_seg_colors_use_complete_multichannel_identity():
+    """128-bit IDs differing outside channel zero must not collapse."""
+    writer = CosmosTransferWriter()
+    first = np.array(
+        [[[0, 0, 0, 0], [0, 0, 0, 7], [42, 1, 0, 0], [42, 2, 0, 0]]], dtype=np.uint32
+    )
+    writer._seg_frames = [first, first[:, [0, 0, 3, 1]]]
+    before, after = writer._colorize_seg_frames()
+    assert not before[0, 0].any()
+    assert np.unique(before.reshape(-1, 3), axis=0).shape[0] == 4
+    np.testing.assert_array_equal(after[0, 2], before[0, 3])
+    np.testing.assert_array_equal(after[0, 3], before[0, 1])
+
+
+@pytest.mark.parametrize("first_channel_collision", [False, True])
+def test_seg_colors_match_full_id_sort(first_channel_collision):
+    """The fast lookup and collision fallback preserve full-ID palette order."""
+    ids = np.array(
+        [
+            [0, 0, 0, 0],
+            [7, 11, 0, 1],
+            [19, 3, 0, 2],
+            [31, 5, 0, 3],
+        ],
+        dtype=np.uint32,
+    )
+    if first_channel_collision:
+        ids[2, 0] = ids[1, 0]
+    rng = np.random.default_rng(101)
+    frame = ids[rng.integers(0, len(ids), size=(64, 64))]
+
+    unique, inverse = np.unique(frame.reshape(-1, 4), axis=0, return_inverse=True)
+    foreground = np.any(unique, axis=1)
+    palette = DistinctColorPalette().colors(int(foreground.sum()))
+    unique_colors = np.zeros((len(unique), 3), dtype=np.uint8)
+    unique_colors[foreground] = palette
+    expected = unique_colors[inverse].reshape(*frame.shape[:2], 3)
+
+    actual = CosmosTransferWriter()._seg_to_color(frame)
+    np.testing.assert_array_equal(actual, expected)
+
+
+def test_distinct_seg_palette_supports_thousands_of_unique_instances():
+    writer = CosmosTransferWriter()
+    colored = writer._seg_to_color(np.arange(1001, dtype=np.uint32)[None, :])
+
+    assert not colored[0, 0].any()
+    assert np.unique(colored[0, 1:], axis=0).shape[0] == 1000
+
+
+def test_distinct_seg_palette_sequence_is_deterministic_and_incremental():
+    expected_prefix = np.array(
+        [
+            [99, 0, 255],
+            [0, 144, 0],
+            [255, 0, 88],
+            [99, 33, 44],
+            [44, 255, 0],
+            [55, 177, 255],
+            [232, 166, 0],
+            [232, 0, 255],
+            [255, 155, 221],
+            [0, 110, 155],
+        ],
+        dtype=np.uint8,
+    )
+    one_shot = DistinctColorPalette().colors(256)
+    incremental_palette = DistinctColorPalette()
+    incremental_palette.colors(10)
+    incremental = incremental_palette.colors(256)
+
+    np.testing.assert_array_equal(one_shot[:10], expected_prefix)
+    np.testing.assert_array_equal(incremental, one_shot)
+
+
+_GOLDEN_PALETTE_PREFIX = {
+    "none": [
+        [99, 0, 255], [0, 144, 0], [255, 0, 88], [99, 33, 44],
+        [44, 255, 0], [55, 177, 255], [232, 166, 0], [232, 0, 255],
+        [255, 155, 221], [0, 110, 155], [166, 99, 22], [155, 0, 155],
+        [11, 243, 221], [0, 77, 0], [0, 33, 166], [166, 121, 177],
+    ],
+    "protanopia": [
+        [110, 0, 221], [88, 155, 0], [133, 22, 0], [144, 166, 255],
+        [221, 221, 33], [255, 0, 110], [99, 0, 110], [133, 210, 188],
+        [199, 133, 155], [77, 121, 255], [88, 88, 11], [188, 0, 144],
+        [232, 177, 88], [110, 255, 166], [166, 33, 77], [210, 88, 177],
+    ],
+    "deuteranopia": [
+        [66, 0, 255], [232, 22, 0], [99, 22, 77], [188, 155, 255],
+        [232, 199, 0], [77, 121, 155], [133, 188, 144], [155, 22, 0],
+        [0, 33, 166], [11, 144, 255], [22, 243, 243], [110, 255, 166],
+        [232, 44, 133], [255, 110, 0], [144, 33, 188], [155, 0, 99],
+    ],
+    "tritanopia": [
+        [166, 33, 121], [33, 177, 88], [11, 77, 0], [255, 121, 255],
+        [66, 255, 0], [133, 33, 255], [232, 0, 0], [199, 210, 121],
+        [166, 133, 44], [99, 33, 44], [221, 22, 232], [0, 133, 0],
+        [110, 88, 0], [177, 144, 255], [133, 199, 210], [88, 0, 155],
+    ],
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("accessibility", sorted(_GOLDEN_PALETTE_PREFIX))
+def test_distinct_seg_palette_golden_colors(accessibility):
+    """Pin the palette so float32 drift across platforms or NumPy builds fails CI.
+
+    Persisted palette files are validated against the regenerated palette, so a
+    different color sequence would make existing state files unloadable.
+    """
+    colors = DistinctColorPalette(accessibility).colors(16)
+    np.testing.assert_array_equal(colors, _GOLDEN_PALETTE_PREFIX[accessibility])
+
+
+@pytest.mark.parametrize("accessibility", sorted(_GOLDEN_PALETTE_PREFIX))
+def test_palette_state_file_with_golden_colors_loads(tmp_path, accessibility):
+    """A state file holding the pinned colors loads and keeps its assignments."""
+    golden = _GOLDEN_PALETTE_PREFIX[accessibility][:3]
+    path = tmp_path / "palette.json"
+    path.write_text(
+        json.dumps(
+            {
+                "format_version": 1,
+                "algorithm": "distinct-v1",
+                "accessibility": accessibility,
+                "colors": golden,
+                "assignments": [
+                    {"key_type": "instance_id", "key": [10 + i], "slot": i}
+                    for i in range(3)
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    colorizer = SegmentationColorizer(accessibility=accessibility, path=path)
+    seg = np.array([[10, 11, 12]], dtype=np.uint32)
+    np.testing.assert_array_equal(
+        colorizer.colorize(seg, "instance_id")[0], np.array(golden, dtype=np.uint8)
+    )
+
+
+def test_distinct_seg_palette_improves_early_perceptual_separation():
+    distinct = DistinctColorPalette().colors(10).astype(np.float32) / 255.0
+
+    def minimum_distance(colors):
+        lab = _srgb_to_oklab(colors)
+        distances = np.linalg.norm(lab[:, None, :] - lab[None, :, :], axis=2)
+        np.fill_diagonal(distances, np.inf)
+        return distances.min()
+
+    assert minimum_distance(distinct) > 0.2
+
+
+@pytest.mark.parametrize("accessibility", ["protanopia", "deuteranopia", "tritanopia"])
+def test_distinct_seg_palette_supports_accessibility_modes(accessibility):
+    standard = DistinctColorPalette().colors(16).astype(np.float32) / 255.0
+    accessible = (
+        DistinctColorPalette(accessibility).colors(16).astype(np.float32) / 255.0
+    )
+
+    def minimum_simulated_distance(colors):
+        lab = _simulate_accessibility_oklab(colors, accessibility)
+        distances = np.linalg.norm(lab[:, None, :] - lab[None, :, :], axis=2)
+        np.fill_diagonal(distances, np.inf)
+        return distances.min()
+
+    assert not np.array_equal(accessible, standard)
+    assert minimum_simulated_distance(accessible) > minimum_simulated_distance(standard)
+
+
+def test_semantic_label_color_key_shares_colors_by_label(mock_backend):
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(
+            conditioning_types=["segmentation"],
+            segmentation_color_key="semantic_label",
+        )
+    )
+    render_vars = {
+        "LdrColor": np.zeros((1, 3, 4), dtype=np.uint8),
+        "DistanceToCameraSD": np.ones((1, 3), dtype=np.float32),
+        "SemanticSegmentation": np.array([[1, 2, 3]], dtype=np.uint32),
+        "SemanticIdMap": {1: "class:car", 2: "class:car", 3: "class:person"},
+    }
+
+    writer.write_frame(0, render_vars, mock_backend)
+    colored = writer._colorize_seg_frames()[0]
+
+    np.testing.assert_array_equal(colored[0, 0], colored[0, 1])
+    assert not np.array_equal(colored[0, 0], colored[0, 2])
+
+
+def test_semantic_label_color_key_requires_labels_for_new_ids(mock_backend):
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(
+            conditioning_types=["segmentation"],
+            segmentation_color_key="semantic_label",
+        )
+    )
+    base = {
+        "LdrColor": np.zeros((1, 1, 4), dtype=np.uint8),
+        "DistanceToCameraSD": np.ones((1, 1), dtype=np.float32),
+        "SemanticSegmentation": np.array([[1]], dtype=np.uint32),
+        "SemanticIdMap": {1: "class:car"},
+    }
+    writer.write_frame(0, base, mock_backend)
+    writer.write_frame(
+        1,
+        {key: value for key, value in base.items() if key != "SemanticIdMap"},
+        mock_backend,
+    )
+
+    conflicting = dict(base)
+    conflicting["SemanticIdMap"] = {1: "class:truck"}
+    with pytest.raises(ValueError, match="changed label"):
+        writer.write_frame(2, conflicting, mock_backend)
+
+    missing = dict(base)
+    missing.pop("SemanticIdMap")
+    missing["SemanticSegmentation"] = np.array([[2]], dtype=np.uint32)
+    with pytest.raises(MissingRenderVarError) as exc_info:
+        writer.write_frame(3, missing, mock_backend)
+    assert exc_info.value.missing_render_var == "SemanticIdMap"
+
+
+def test_stable_id_palette_state_persists_assignments(
+    tmp_path, mock_backend, monkeypatch
+):
+    state_path = tmp_path / "segmentation-palette.json"
+    config = CosmosTransferWriterConfig(
+        conditioning_types=["segmentation"],
+        segmentation_color_key="stable_id",
+        segmentation_palette_path=state_path,
+    )
+    writer = CosmosTransferWriter(config)
+    encoded = []
+
+    def encode(frames, width, height):
+        encoded.append([frame.copy() for frame in frames])
+        return b"video"
+
+    monkeypatch.setattr(writer, "_encode_video", encode)
+    stable_ids = np.array(
+        [[[0, 0, 0, 0], [11, 0, 0, 0], [22, 0, 0, 0]]], dtype=np.uint32
+    )
+    writer.write_frame(
+        0,
+        {
+            "LdrColor": np.zeros((1, 3, 4), dtype=np.uint8),
+            "DistanceToCameraSD": np.ones((1, 3), dtype=np.float32),
+            "StableIdSegmentation": stable_ids,
+        },
+        mock_backend,
+    )
+    writer.finalize(mock_backend)
+
+    state = json.loads(state_path.read_text())
+    assert state["assignments"] == [
+        {"key": [11, 0, 0, 0], "key_type": "stable_id", "slot": 0},
+        {"key": [22, 0, 0, 0], "key_type": "stable_id", "slot": 1},
+    ]
+    assert not list(tmp_path.glob("*.tmp"))
+
+    restored = CosmosTransferWriter(config)
+    recolored = restored._seg_to_color(stable_ids[:, [0, 2, 1]])
+    original = encoded[1][0]
+    np.testing.assert_array_equal(recolored[0, 1], original[0, 2])
+    np.testing.assert_array_equal(recolored[0, 2], original[0, 1])
+
+
+def test_palette_state_rejects_incompatible_key_mode(tmp_path):
+    state_path = tmp_path / "segmentation-palette.json"
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(segmentation_palette_path=state_path)
+    )
+    writer._seg_to_color(np.array([[1]], dtype=np.uint32))
+    writer._seg_colorizer.save()
+
+    with pytest.raises(ValueError, match="key type"):
+        CosmosTransferWriter(
+            CosmosTransferWriterConfig(
+                segmentation_color_key="semantic_id",
+                segmentation_palette_path=state_path,
+            )
+        )
+
+
+def test_palette_state_rejects_modified_colors(tmp_path):
+    state_path = tmp_path / "segmentation-palette.json"
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(segmentation_palette_path=state_path)
+    )
+    writer._seg_to_color(np.array([[1]], dtype=np.uint32))
+    writer._seg_colorizer.save()
+    state = json.loads(state_path.read_text())
+    state["colors"][0] = [1, 2, 3]
+    state_path.write_text(json.dumps(state))
+
+    with pytest.raises(ValueError, match="colors do not match"):
+        CosmosTransferWriter(
+            CosmosTransferWriterConfig(segmentation_palette_path=state_path)
+        )
+
+
+@pytest.mark.parametrize("shaded_first", [False, True])
+def test_seg_and_shaded_share_stable_colors(shaded_first):
+    """Both paths retain the same colors regardless of invocation order."""
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(shaded_seg_light_dir=(0.0, 0.0, 1.0))
+    )
+    writer._seg_frames = [
+        np.array([[0, 10, 20]], dtype=np.uint32),
+        np.array([[0, 0, 20]], dtype=np.uint32),
+    ]
+    normals = np.zeros((1, 3, 3), dtype=np.float32)
+    normals[..., 2] = 1.0
+    writer._normal_frames = [normals, normals]
+    if shaded_first:
+        shaded = writer._compute_shaded_seg_frames()
+        plain = writer._colorize_seg_frames()
+    else:
+        plain = writer._colorize_seg_frames()
+        shaded = writer._compute_shaded_seg_frames()
+    for unshaded, lit in zip(plain, shaded, strict=True):
+        np.testing.assert_array_equal(unshaded, lit)
+    np.testing.assert_array_equal(shaded[0][0, 2], shaded[1][0, 2])
+
+
+def test_seg_palette_remains_stable_between_encoded_clips(mock_backend, monkeypatch):
+    """cut() preserves dataset-session colors across clip boundaries."""
+    writer = CosmosTransferWriter(
+        CosmosTransferWriterConfig(conditioning_types=["segmentation"])
+    )
+    encoded = []
+
+    def encode(frames, width, height):
+        encoded.append([f.copy() for f in frames])
+        return b"video"
+
+    monkeypatch.setattr(writer, "_encode_video", encode)
+    for index, ids in enumerate(([0, 10, 20], [0, 0, 20])):
+        writer.write_frame(
+            index,
+            {
+                "LdrColor": np.zeros((1, 3, 4), dtype=np.uint8),
+                "DistanceToCameraSD": np.ones((1, 3), dtype=np.float32),
+                "SemanticInstanceSegmentation": np.array([ids], dtype=np.uint32),
+            },
+            mock_backend,
+        )
+    assert writer.cut(mock_backend) == 0
+    np.testing.assert_array_equal(encoded[1][0][0, 2], encoded[1][1][0, 2])
+    writer.write_frame(
+        0,
+        {
+            "LdrColor": np.zeros((1, 3, 4), dtype=np.uint8),
+            "DistanceToCameraSD": np.ones((1, 3), dtype=np.float32),
+            "SemanticInstanceSegmentation": np.array([[0, 0, 20]], dtype=np.uint32),
+        },
+        mock_backend,
+    )
+    writer.finalize(mock_backend)
+    np.testing.assert_array_equal(encoded[3][0][0, 2], encoded[1][0][0, 2])
+    assert len(json.loads(mock_backend.written["manifest.json"])["clips"]) == 2

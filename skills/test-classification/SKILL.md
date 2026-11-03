@@ -21,7 +21,7 @@ Defaults for unmarked tests are unit-ish, CPU-only, short, and stable. Add expli
 - Use `unit` for isolated utilities, config validation, serializers, and pure writer helper logic.
 - Use `integration` when multiple ovannotators subsystems interact, e.g. writer + backend, renderer output extraction + writer, or optional dependency integration with skips.
 - Use `e2e` for full user-visible flows: rendered scene → render vars → writer → committed output/golden, README/tutorial execution, or real transfer/inference workflows.
-- Add `gpu` to anything requiring CUDA, `ovrtx`, GPU codecs, or real renderer execution. GPU tests are excluded from default PR CI and should run in the nightly/manual GPU e2e lane.
+- Add `gpu` to anything requiring CUDA, `ovrtx`, GPU codecs, or real renderer execution. GPU tests are excluded from default PR CI and should run in the nightly/manual GPU e2e lane. A test that imports `ovrtx` but lacks the marker is a classification bug: it silently skips in CI and only runs on a machine with the renderer installed, so nothing gates it. Verify with `skills/gpu-verification/SKILL.md`, which runs both lanes against the real renderer.
 - Add `network` for S3/HTTP/external-service tests unless fully faked.
 - Add `benchmark` for pytest-benchmark or performance-only assertions; keep benchmarks under `tests/benchmarks/`.
 - Add `flaky`, `known_failure_rate`, or `experimental` only with an owner/explanation; these are excluded from gating default runs.

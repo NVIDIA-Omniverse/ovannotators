@@ -37,8 +37,8 @@ Run the smallest relevant subset first, then the default suite:
 ```bash
 python -m pytest <changed-test-file> -q
 python -m pytest -q
-ruff check source/ tests/ scripts/
-ruff format --check source/ tests/ scripts/
+ruff check src/ tests/ scripts/
+ruff format --check src/ tests/ scripts/
 ```
 
 For GPU/e2e work, also collect or run the selected lane on a suitable host:

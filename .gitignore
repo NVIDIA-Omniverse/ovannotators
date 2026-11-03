@@ -12,8 +12,8 @@ _*/
 # Underscore-prefixed dirs above are scratch/build artifacts, but the
 # ``_internal`` package is real, importable source and must be tracked/packaged.
 # Re-include only its Python sources (keep __pycache__ etc. ignored).
-!source/ovannotators/_internal/
-!source/ovannotators/_internal/*.py
+!src/ovannotators/_internal/
+!src/ovannotators/_internal/*.py
 
 # Sphinx static assets live under an underscore-prefixed dir but are real
 # source (e.g. docs media embedded in the tutorials) and must be tracked.
