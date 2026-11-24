@@ -664,12 +664,33 @@ def test_capture_continues_after_producer_handles_episode_error(tmp_path):
     assert _manifest(tmp_path)["samples"] == 1
 
 
-def test_basic_non_portable_file_name_fails_during_write(tmp_path):
+@pytest.mark.parametrize(
+    ("winerror", "expected_error"),
+    [(None, PackagingError), (123, PackagingError), (5, BackendWriteError)],
+    ids=["native", "invalid-windows-name", "access-denied"],
+)
+def test_basic_non_portable_file_name_fails_during_write(
+    tmp_path, monkeypatch, winerror, expected_error
+):
+    if winerror is not None:
+        write_bytes = Path.write_bytes
+
+        def write_with_error(path, data):
+            if path.name == "custom:aov.npy":
+                error = OSError("simulated Windows write failure")
+                error.winerror = winerror
+                raise error
+            return write_bytes(path, data)
+
+        monkeypatch.setattr(Path, "write_bytes", write_with_error)
     backend = _backend(tmp_path)
     writer = BasicWriter(BasicWriterConfig())
     values = {"Custom:Aov": np.zeros((2, 2), dtype=np.float32)}
     with DatasetCapture(writer, backend) as dataset:
-        with pytest.raises(PackagingError, match="custom:aov.npy"):
+        match = (
+            "custom:aov.npy" if expected_error is PackagingError else "write failure"
+        )
+        with pytest.raises(expected_error, match=match):
             with dataset.episode("a") as episode:
                 episode.write_frame(0, values)
         with dataset.episode("a") as episode:

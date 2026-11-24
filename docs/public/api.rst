@@ -77,6 +77,9 @@ The same API accepts exact identifiers from ``WriterRegistry`` and
    * - ``cosmos_transfer``
      - ``default``
      - Color plus selected conditioning inputs; depth is 8-bit inverse-depth video.
+   * - ``lerobot_v3``
+     - ``default``
+     - Named independent RGB streams, robot state/action, and source timestamps.
    * - ``cosmos_multiview``
      - ``default``
      - Caller-defined stream schema, alignment, representations, and QA policies.
@@ -178,12 +181,17 @@ Selected top-level exports (see ``ovannotators.__all__`` for the complete list):
        KITTIWriter, KITTIWriterConfig,
        YOLOWriter, YOLOWriterConfig,
        BOPWriter, BOPWriterConfig,
+       DOPEWriter, DOPEWriterConfig,
+       CenterPoseWriter, CenterPoseWriterConfig,
+       YCBVideoWriter, YCBVideoWriterConfig,
        LeRobotWriter, LeRobotWriterConfig,
        CosmosTransferWriter, CosmosTransferWriterConfig,
        # Episode-aware profile writers
        ProfileWriter, ProfileWriterRegistry,
        EpisodeEnvelope, SampleEnvelope, StreamDescriptor, NamedTensor,
        ProfileMetadata, WriterRecord, LossReport, ConformanceResult,
+       LeRobotV3Writer, LeRobotV3WriterConfig, LeRobotV3FeatureSpec,
+       validate_lerobot_v3_canonical,
        CosmosMultiviewWriter, CosmosMultiviewWriterConfig,
        CosmosMaterializationConfig, CosmosQAConfig,
        CosmosValidationFinding, CosmosValidationRecord,
@@ -249,13 +257,92 @@ consumer acceptance are recorded separately and are not implied by the marker.
 Third-party profile writers register with ``@ProfileWriterRegistry.register``
 or the ``ovannotators.profile_writers`` entry-point group.
 
-LeRobot v3 and LeRobot Lance Profiles
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+LeRobot v3 Profile
+~~~~~~~~~~~~~~~~~~
 
-The ``lerobot_v3`` and ``lerobot_lance`` profile writers are coming soon. They
-are not part of 0.2.0 because they depend on ``lerobot`` 0.6.1, which requires
-Pillow earlier than 13, and 0.2.0 requires Pillow 13. See
-:doc:`writers/lerobot_v3`.
+:Registry name: ``lerobot_v3``
+:Target: ``lerobot==0.7.0``, schema ``v3.0``
+:GPU required: Yes for NVENC video encoding (H.264, HEVC, or AV1)
+:Extra dependencies: ``[lerobot]`` (``pyarrow``), ``[video]`` (``PyNvVideoCodec``)
+
+``LeRobotV3Writer`` is independent of the legacy ``lerobot`` frame writer. Its
+``LeRobotV3WriterConfig`` requires explicit camera stream IDs and
+``LeRobotV3FeatureSpec`` declarations for state and action names, shapes,
+units, representations, and coordinate frames. Each ``SampleEnvelope`` supplies
+an authoritative nanosecond timestamp; the writer retains it exactly in
+``source.timestamp_ns`` while deriving ``timestamp`` from ``frame_index`` and
+``fps``.
+
+``LeRobotV3WriterConfig`` requires ``fps``, ``camera_stream_ids``, ``state``,
+and ``action``. An optional ``repo_id`` is checked for the
+``namespace/dataset`` form but not written to the dataset.
+``timestamp_tolerance_ns`` sets the accepted
+timestamp error (at most 100,000 ns); timestamps outside it are rejected rather
+than reconstructed from frame indexes. Sharding and NVENC encoding are
+configured via ``chunks_size``, ``data_files_size_in_mb``,
+``video_files_size_in_mb``, ``video_codec`` (``"h264"``, ``"hevc"``, or
+``"av1"``), ``video_lossless``, ``video_preset``, and ``video_gop``.
+``video_gop`` defaults to 2, the keyframe interval LeRobot itself uses, so a
+loader decodes at most one extra frame per random access; ``None`` keeps the
+NVENC default and produces smaller files that are slower to seek. State,
+action, and camera names must not produce a tabular key containing
+``image``, because LeRobot treats such statistics as image statistics.
+
+Because ``SampleEnvelope`` has one timestamp for the whole sample rather than
+one timestamp per observation, camera rates must be exact integer divisors of
+the dataset FPS and their phase is fixed to CFR slot zero at the episode source
+origin. A slower camera must be present on those cadence slots and must mark
+each intervening slot ``not_sampled_at_source_rate`` in
+``SampleEnvelope.missing_data``. The writer zero-order-hold resamples that
+stream onto the validated video timeline and stores the selected source
+timestamp in a per-camera Parquet column. Arbitrary rates, shifted phases,
+source drops, missing state/action, and absences inconsistent with the declared
+camera cadence reject the affected episode or sample before writer state
+changes. ``LeRobotV3Writer`` natively handles Parquet sharding, NVENC video
+encoding and MP4 track concatenation, relational episode metadata, tasks, and
+quantile statistics.
+
+The writer emits the LeRobot v3 relational layout:
+
+::
+
+   {root}/
+   ├── data/chunk-NNN/file-NNN.parquet
+   ├── videos/observation.images.{camera}/chunk-NNN/file-NNN.mp4
+   ├── meta/
+   │   ├── episodes/chunk-NNN/file-NNN.parquet
+   │   ├── info.json
+   │   ├── stats.json
+   │   └── tasks.parquet
+   └── _ovannotators/
+       ├── profile.json
+       ├── writer_record.json
+       ├── loss_report.json
+       ├── conformance.json
+       ├── payload_checksums.json
+       └── _SUCCESS
+
+Both native LeRobot writers reserve one payload manifest before uploading files,
+then publish ``_SUCCESS`` after the payload and evidence are complete. The
+marker must agree with ``conformance.json``. The v3 writer records
+``canonical_loader="not_run"``. Use the separate canonical validator to check
+upstream reader compatibility.
+``validate_lerobot_v3_canonical`` can independently reopen a local output in an
+isolated Python 3.12 conformance environment pinned by
+``tests/requirements/lerobot-v3-conformance.txt``. It requires the pinned
+``lerobot`` version unless ``expected_version`` names another, and its
+``evidence["loader"]`` records the version it actually ran. A missing or
+failing loader is a conformance failure, never a raw-parsing fallback. Before loading, it
+requires ``_SUCCESS`` and verified checksums, relative ``data_path`` and
+``video_path`` templates, and verified data and video shards for every episode.
+The initial check restricts storage dispatch to the native format and reports a
+structural failure for Parquet features that decode external media. The loader
+then runs in a child Python process with ``HF_HUB_OFFLINE=1`` and
+``HF_DATASETS_OFFLINE=1``,
+so a tree it still finds incomplete fails instead of being completed from the
+Hugging Face Hub. These checks establish that the tree is complete, not who
+produced it; open third-party datasets in an isolated environment.
+
 
 Cosmos 3.5 Multiview profile
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -313,6 +400,91 @@ fresh writer instance can validate a completed output and verify its
 ``_SUCCESS`` marker and complete payload-checksum manifest. Validation also
 enforces exact Arrow types and schema metadata and resolves every
 ``dataset_info_uri`` and ``sample_config_uri`` through the backend.
+
+LeRobot Lance Profile
+~~~~~~~~~~~~~~~~~~~~~
+
+:Registry name: ``lerobot_lance``
+:Target: ``lerobot-lancedb==0.3.1`` video-blob layout
+:GPU required: Yes for NVENC video encoding (H.264, HEVC, or AV1)
+:Extra dependencies: ``[cosmos-multiview]`` (``pylance==11.0.0``, ``pyarrow``),
+   ``[video]`` (``PyNvVideoCodec``)
+
+``LeRobotLanceWriter`` writes ``frames.lance``, ``videos.lance``, and
+``meta.lance``, and the LeRobot metadata tree that ``LanceDBDataset`` reads. It does
+not first create and then convert a Parquet/MP4 LeRobot v3 dataset. MP4
+payloads are encoded once and inserted as Lance blob-v2 rows
+(``data_storage_version="2.2"``) with the upstream byte-index fields.
+
+``LeRobotLanceWriterConfig`` requires ``fps``, ``camera_stream_ids``,
+``state``, and ``action``. ``state`` and ``action`` are
+``LeRobotLanceFeatureSpec`` declarations of ``stream_id``, ``feature_names``,
+``units``, ``representation``, ``shape``, ``dtype`` (default ``float32``), and
+an optional ``coordinate_frame``; ``feature_names`` must name every flattened
+element. Generated names such as ``index`` and ``source.frame_id`` are
+reserved. Tabular keys must remain unique when dots are replaced with
+underscores in Lance column names. Optional fields:
+
+- ``repo_id``: LeRobot ``namespace/dataset`` identifier (default ``None``;
+  when given it must contain ``/``). It is not written to the dataset.
+- ``timestamp_tolerance_ns``: accepted CFR timestamp error, 0 to 100000 ns
+  (default 100000).
+- ``video_codec``, ``video_lossless``, ``video_preset``, ``video_gop``: NVENC
+  encoder settings (default codec ``"h264"``; supports ``"h264"``, ``"hevc"``,
+  and ``"av1"``). ``video_gop`` defaults to 2, LeRobot's own keyframe
+  interval, so a range read fetches little more than the requested frame.
+- ``staging_dir`` is a new private local directory for encoded episode videos
+  and the native Lance tree. It must be outside every active writer's stage.
+  With ``DiskBackend``, use disjoint staging and output directories. Put it
+  in a directory that only you can write to, or in a sticky directory such as
+  the system temporary directory.
+- ``canonical_loader_check`` and ``keep_staging``: see below.
+
+Authoritative source timestamps remain columns in the frames table. Camera
+rates must be exact integer divisors of the dataset FPS, with phase fixed to
+CFR slot zero at the episode source origin. A slower camera must be present on
+those cadence slots and must mark each intervening slot
+``not_sampled_at_source_rate`` in ``SampleEnvelope.missing_data``. The writer
+zero-order-hold resamples that stream onto the video timeline and stores the
+selected source timestamp in a per-camera frames-table column. A camera frame
+outside its cadence, a missing marker, or a camera with no frame within its
+cadence rejects the sample or episode.
+
+``end_episode`` encodes each camera clip, checks it against the camera
+geometry, frame rate, and episode length, and writes it to the staging
+directory. ``finalize`` then builds the Lance tree in that directory. By default
+(``canonical_loader_check="skip"``), it publishes without importing
+``lerobot-lancedb`` and records ``canonical_loader="not_run"`` in
+``conformance.json``. Set ``canonical_loader_check="required"`` in an isolated
+conformance environment (``tests/requirements/lerobot-lance-conformance.txt``)
+to require the pinned upstream ``LanceDBDataset`` loader to open the tree and
+decode a sample in an offline child interpreter before publishing. Missing or
+unreadable local metadata fails validation; the check never downloads from the
+Hugging Face Hub. ``conformance.json`` then records
+``canonical_loader="passed"`` on success, or nothing is published and
+``finalize`` raises on failure.
+
+Completed output validation checks every payload file against the SHA-256
+manifest. Missing, extra, or changed files fail structural validation.
+
+``LeRobotLanceWriter.staging_root`` returns the staging directory. It holds the
+encoded episode videos from the first ``end_episode`` until ``finalize``
+succeeds, and the writer then removes it unless ``keep_staging=True``, which
+keeps the native tree for inspection. A failed ``finalize`` can be retried. If
+it fails before publication starts, it removes the partial tree and keeps the
+encoded videos. Once publication starts, it keeps the built tree, and a retry
+publishes only missing files and accepts files that already hold the same
+bytes; a different file at a destination path stops the retry. Once
+``finalize`` has been called, even if it failed, ``begin_episode`` raises, so a
+retry never publishes a tree that omits a later episode. A failed
+``end_episode`` keeps the episode active so it can be retried.
+
+.. note::
+
+   The writer holds the uncompressed RGB frames of the active episode only.
+   Frame rows, statistics, and video byte indices of every ended episode stay
+   in memory until ``finalize``; encoded videos stay on local disk under
+   ``staging_dir``.
 
 UMI ReplayBuffer Profile
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -539,7 +711,7 @@ into several episodes, to fit available RAM.
 **Timeline contract:** ``write_sample`` requires each sample's ``frame_id`` to
 equal its zero-based position within the episode, and its ``timestamp_ns``
 (relative to the episode's ``source_origin_ns``) to sit on the ``fps`` grid
-within 100 microseconds. A sample that
+within 100 microseconds, the same tolerance as ``lerobot_v3``. A sample that
 violates either rule raises ``ConfigurationError`` and is not buffered, so the
 encoded video and the Parquet rows cannot silently desynchronize. A repeated
 ``episode_id`` is also rejected.
@@ -632,7 +804,7 @@ writer is then missing from ``WriterRegistry``.
 
 For dataset purpose, output schemas, usage, and upstream format references,
 see :doc:`writers/index`. That guide also covers the episode-aware
-``cosmos_multiview`` profile.
+``lerobot_v3`` and ``cosmos_multiview`` profiles.
 
 
 BasicWriter
@@ -688,7 +860,7 @@ Writes all present render variables in a flat per-frame directory layout. Useful
      - ``bool``
      - ``False``
      - Also write one MP4 per video-capable var, spanning every frame
-       (H.264 by default, HEVC with ``video_codec``; requires ``PyNvVideoCodec``)
+       (H.264 by default, HEVC or AV1 with ``video_codec``; requires ``PyNvVideoCodec``)
    * - ``video_fps``
      - ``float``
      - ``24``
@@ -777,7 +949,7 @@ rejects a file whose recorded modes do not match its configuration.
 With ``video=True`` the per-frame files above are still written, and each
 video-capable render var is additionally encoded into a single MP4 covering
 every frame the writer saw. H.264 is the default; set ``video_codec="hevc"``
-for HEVC::
+for HEVC or ``video_codec="av1"`` for AV1 (Ada Lovelace or newer GPU)::
 
    {root}/
    └── videos/
@@ -834,9 +1006,9 @@ NVENC-capable GPU. To package the episode videos as WebDataset samples, pass
      - Default
      - Description
    * - ``video_codec``
-     - ``"h264" | "hevc"``
+     - ``"h264" | "hevc" | "av1"``
      - ``"h264"``
-     - Codec used for MP4 output
+     - Codec used for MP4 output; AV1 needs an Ada Lovelace or newer GPU
    * - ``video_lossless``
      - ``bool``
      - ``False``
@@ -1137,18 +1309,176 @@ Pose Estimation) format.
    {root}/{scene_id:06d}/
    ├── rgb/              {frame_id:06d}.png
    ├── depth/            {frame_id:06d}.png  (16-bit)
-   ├── mask/             {frame_id:06d}_{obj_id:06d}.png
-   ├── mask_visib/       {frame_id:06d}_{obj_id:06d}.png
+   ├── mask/             {frame_id:06d}_{gt_index:06d}.png
+   ├── mask_visib/       {frame_id:06d}_{gt_index:06d}.png
    ├── scene_camera.json
    ├── scene_gt.json
-   └── scene_gt_info.json
+   ├── scene_gt_info.json
+   └── mask_layout.json
+
+
+DOPEWriter
+~~~~~~~~~~
+
+:Registry name: ``dope``
+:GPU required: No
+:Required render vars: ``LdrColor``, ``SemanticBoundingBox3D``, ``CameraParams``
+:Optional render vars: ``SemanticIdMap``, ``StableIdMap``; ``OcclusionSD``, ``InstanceIdTokenMapSD``, ``InstanceMap`` and ``StableIdSemanticIdMap`` together for ``visibility``
+:Extra dependencies: None
+
+Writes the object-pose layout of Isaac Sim's ``PoseWriter(format="dope")`` for
+`DOPE <https://github.com/NVlabs/Deep_Object_Pose>`_ training: one image and one
+JSON per frame with each object's camera-frame pose, nine projected cuboid
+keypoints and visibility. See :doc:`writers/dope` for the field reference and
+limits.
+
+**Config:** ``DOPEWriterConfig``
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 22 15 43
+
+   * - Parameter
+     - Type
+     - Default
+     - Description
+   * - ``visibility_threshold``
+     - ``float``
+     - ``0.0``
+     - Skip objects with ``visibility`` at or below this value
+   * - ``skip_empty_frames``
+     - ``bool``
+     - ``True``
+     - Write nothing for a frame with no objects
+   * - ``frame_padding``
+     - ``int``
+     - ``6``
+     - Zero-padding width of the frame number in file names
+   * - ``image_format``
+     - ``"png" | "jpg"``
+     - ``"png"``
+     - RGB image encoding
+
+**Output structure:**
+
+::
+
+   {root}/
+   ├── {frame_id:06d}.png
+   └── {frame_id:06d}.json
+
+
+CenterPoseWriter
+~~~~~~~~~~~~~~~~
+
+:Registry name: ``centerpose``
+:GPU required: No
+:Required render vars: ``LdrColor``, ``SemanticBoundingBox3D``, ``CameraParams``
+:Optional render vars: ``SemanticIdMap``, ``StableIdMap``; ``OcclusionSD``, ``InstanceIdTokenMapSD``, ``InstanceMap`` and ``StableIdSemanticIdMap`` together for ``visibility``
+:Extra dependencies: None
+
+Writes the object-pose layout of Isaac Sim's ``PoseWriter(format="centerpose")``
+for `CenterPose <https://github.com/NVlabs/CenterPose>`_ training: one image and
+one JSON per frame with each object's camera-frame pose, ``scale``, camera-frame
+and projected cuboid keypoints, and visibility. See :doc:`writers/centerpose`
+for the field reference and limits.
+
+**Config:** ``CenterPoseWriterConfig``
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 22 15 43
+
+   * - Parameter
+     - Type
+     - Default
+     - Description
+   * - ``visibility_threshold``
+     - ``float``
+     - ``0.0``
+     - Skip objects with ``visibility`` at or below this value
+   * - ``skip_empty_frames``
+     - ``bool``
+     - ``True``
+     - Write nothing for a frame with no objects
+   * - ``frame_padding``
+     - ``int``
+     - ``6``
+     - Zero-padding width of the frame number in file names
+   * - ``image_format``
+     - ``"png" | "jpg"``
+     - ``"png"``
+     - RGB image encoding
+
+**Output structure:**
+
+::
+
+   {root}/
+   ├── {frame_id:06d}.png
+   └── {frame_id:06d}.json
+
+
+YCBVideoWriter
+~~~~~~~~~~~~~~
+
+:Registry name: ``ycb_video``
+:GPU required: No
+:Required render vars: ``LdrColor``, ``DistanceToImagePlaneSD``, ``SemanticSegmentation``, ``SemanticIdMap``, ``SemanticBoundingBox2DTight``, ``SemanticBoundingBox3D``, ``CameraParams``
+:Extra dependencies: None
+
+Writes the layout of Isaac Sim's ``YCBVideoWriter`` for YCB-Video training:
+per frame a color image, 16-bit depth, a class-index label image, a box list and
+a MATLAB v5 ``-meta.mat`` with camera-frame poses in metres, plus ``train.txt``.
+Model vertices are supplied with ``write_model_points``. See
+:doc:`writers/ycb_video` for the field reference and the differences from Isaac
+Sim.
+
+**Config:** ``YCBVideoWriterConfig``
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 22 15 43
+
+   * - Parameter
+     - Type
+     - Default
+     - Description
+   * - ``class_name_to_index_map``
+     - ``dict[str, int]``
+     - required
+     - Semantic label to YCB-Video class index (1-255); other labels are background
+   * - ``factor_depth``
+     - ``int``
+     - ``10000``
+     - ``depth_m = stored / factor_depth``; limits depth to ``65535 / factor_depth`` m
+   * - ``video_id``
+     - ``str``
+     - ``"0000"``
+     - Video directory under ``data/YCB_Video/data/``
+
+**Output structure:**
+
+::
+
+   {root}/data/
+   ├── YCB_Video/
+   │   ├── data/{video_id}/
+   │   │   ├── {frame_id:06d}-color.png
+   │   │   ├── {frame_id:06d}-depth.png
+   │   │   ├── {frame_id:06d}-label.png
+   │   │   ├── {frame_id:06d}-box.txt
+   │   │   └── {frame_id:06d}-meta.mat
+   │   └── train.txt
+   └── models/{model_name}/points.xyz
 
 
 LeRobotWriter
 ~~~~~~~~~~~~~
 
 This is the legacy frame-oriented writer and is not the exact LeRobot v3
-profile. The LeRobot v3 profile is coming soon; see :doc:`writers/lerobot_v3`.
+profile. Use ``lerobot_v3`` and ``LeRobotV3Writer`` when downstream
+``LeRobotDataset`` v0.7.0 conformance is required.
 
 :Registry name: ``lerobot``
 :GPU required: Yes (NVENC via PyNvVideoCodec)
@@ -1479,6 +1809,14 @@ Backends resolve relative paths against their configured root. For
 ``DiskBackend``, absolute paths are also accepted when they resolve inside
 ``root_dir``.
 
+Native LeRobot v3 and Lance publication requires an atomic
+``write_if_absent(path, data) -> bool`` operation. Disk, S3, and capable
+ovstorage routes implement it. The operation publishes complete bytes and
+returns ``True`` on creation. It returns ``False`` when another object already
+owns the path, preserving that object's bytes. It raises ``BackendWriteError``
+if the destination cannot support the operation. Atomic visibility and
+durability after filesystem or power failure are separate guarantees.
+
 
 DiskBackend
 ~~~~~~~~~~~
@@ -1502,6 +1840,15 @@ Paths that resolve outside it, including ``..`` traversal, are rejected.
   ``exists()`` returns ``False``.
 * The check runs at call time. It is not a sandbox against another process
   changing the filesystem concurrently.
+* ``write()`` writes the destination in place. An overwrite needs write
+  access to the existing file and keeps its owner, group, and access
+  controls. It is not atomic.
+* ``write_if_absent()`` writes the bytes to a hidden
+  ``.ovannotators-<id>.tmp`` file beside the destination, then publishes it
+  with an exclusive rename or a hard link. The new file inherits the
+  directory's group and access controls like any other new file. The
+  destination filesystem must support one of these operations. ``list()``
+  omits the hidden files.
 
 .. code-block:: python
 
@@ -1926,6 +2273,11 @@ Implement the ``Backend`` protocol:
        def exists(self, path: str) -> bool: ...
        def makedirs(self, path: str) -> None: ...
 
+Implement ``write_if_absent(path, data) -> bool`` to support native LeRobot
+publication. Use one storage operation that checks for an existing object and
+publishes the bytes as a unit. A client-side existence check followed by a
+write leaves a race between producers.
+
 The ``write_array`` encoding parameter accepts: ``"npy"``, ``"png"``, ``"jpg"``, ``"exr"``.
 
 ``exr_compression`` is a keyword-only parameter that selects the EXR compression
@@ -2278,20 +2630,26 @@ directory and a ``depth`` directory exactly when ``write_depth`` is set.
 
 BOP samples (``bop-frame-v1``) contain one frame of the configured
 ``{scene_id:06d}`` scene: ``rgb.png``, 16-bit ``depth.png``, every
-``mask.<obj>.png`` and ``mask_visib.<obj>.png`` file named after the frame, a
+``mask.<gt_index>.png`` and ``mask_visib.<gt_index>.png`` file named after the frame, a
 generated ``json`` record and ``metadata.json``. Encoded bytes are unchanged.
 The record has ``schema_version``, ``scene_id``, ``frame_id``, the frame's
 unchanged ``scene_camera``, ``scene_gt`` and ``scene_gt_info`` entries (``null``
 when the scene document is absent) and ``masks``: per ``scene_gt`` entry, its
 ``obj_id`` and the ``mask``/``mask_visib`` component names, or ``null`` for an
-absent file. Entries that share an ``obj_id`` reference the same native mask
-file. Object IDs, intrinsics, millimetre poses and ``depth_scale``
+absent file. The six-digit ``gt_index`` is the entry's zero-based position in
+``scene_gt``; entries that share an ``obj_id`` retain distinct masks.
+A scene with masks must hold the ``mask_layout.json`` marker that
+``BOPWriter`` writes; without it, export fails rather than guess the suffix
+scheme. Legacy native output with model IDs in mask filenames must be migrated
+as described in :doc:`writers/bop` before export. Object IDs, intrinsics,
+millimetre poses and ``depth_scale``
 (``depth_mm = depth * depth_scale``) keep native values; the manifest adds the
 sorted dataset ``object_ids``. Finalized export reads frames from
 ``scene_camera.json``, requires each frame's RGB and depth, ``cam_K`` and an
 entry in every present scene document, checks ``depth_scale`` against the
 writer, and rejects non-finite values, negative or non-integer ``obj_id``
-values and files that belong to no frame or scene document. ``source-paths.json`` lists the three scene
+values, masks without a matching ground-truth index, and files that belong to
+no frame or scene document. ``source-paths.json`` lists the three scene
 documents as ``shared`` entries.
 
 YOLO samples (``yolo-frame-v1``, ``YOLOFrameAdapter``, experimental) contain

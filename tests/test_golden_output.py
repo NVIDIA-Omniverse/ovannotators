@@ -120,7 +120,7 @@ def _make_fast_render_vars(rng: np.random.Generator, frame_id: int) -> dict:
         bbox3d[i]["x_min"], bbox3d[i]["y_min"], bbox3d[i]["z_min"] = lo
         bbox3d[i]["x_max"], bbox3d[i]["y_max"], bbox3d[i]["z_max"] = hi
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = np.asarray(center, dtype=np.float32)
+        transform[3, :3] = np.asarray(center, dtype=np.float32)
         bbox3d[i]["transform"] = transform
 
     cam = np.zeros(1, dtype=OVRTX_CAMERA_PARAMS_DTYPE)
@@ -404,6 +404,7 @@ class TestBOPWriterGolden:
         assert (scene_dir / "scene_camera.json").exists()
         assert (scene_dir / "scene_gt.json").exists()
         assert (scene_dir / "scene_gt_info.json").exists()
+        assert (scene_dir / "mask_layout.json").exists()
 
         for fid in range(NUM_FRAMES):
             assert (scene_dir / "rgb" / f"{fid:06d}.png").exists()

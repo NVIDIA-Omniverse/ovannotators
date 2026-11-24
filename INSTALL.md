@@ -34,19 +34,21 @@ or `pip install "ovannotators[<name>]"`):
 | --- | --- | --- |
 | `s3` | S3 backend support ([boto3](https://boto3.amazonaws.com/v1/documentation/api/latest/index.html)) | Writing datasets directly to [Amazon S3](https://aws.amazon.com/s3/) |
 | `ovstorage` | [ovstorage](https://github.com/NVIDIA-Omniverse/ovstorage) Stack adapter | Writing through ovstorage cloud, local, or cached routes |
-| `lerobot` | [LeRobot](https://huggingface.co/docs/lerobot/index) writer support ([PyArrow](https://arrow.apache.org/docs/python/)) | Writing legacy Hugging Face LeRobot datasets, or the `groot_lerobot_v2` profile (which also needs `video` and an NVIDIA GPU for NVENC) |
-| `cosmos-multiview` | Cosmos 3.5 tables (`pylance==11.0.0`, `pyarrow==25.0.1`) | Candidate registration and timestamp-aligned materialization |
+| `lerobot` | [LeRobot](https://huggingface.co/docs/lerobot/index) Parquet support ([PyArrow](https://arrow.apache.org/docs/python/)) | Writing `lerobot`, `groot_lerobot_v2`, or native `lerobot_v3` datasets (each also needs `video` and an NVIDIA GPU for NVENC) |
+| `cosmos-multiview` | Lance and Parquet tables (`pylance==11.0.0`, `pyarrow==25.0.1`) | Writing `cosmos_multiview` or native `lerobot_lance` datasets (`lerobot_lance` also needs `video` and an NVIDIA GPU for NVENC) |
 | `umi` | Zarr v2 and JPEG-XL codecs ([Zarr](https://zarr.readthedocs.io/), `zarr<3`) | Writing the `umi_replay_buffer` profile |
 | `gpu` | GPU image codec support ([nvImageCodec](https://docs.nvidia.com/cuda/nvimagecodec/), CUDA 12) | GPU-accelerated image encode/decode |
-| `video` | Video codec support ([PyNvVideoCodec](https://docs.nvidia.com/video-technologies/pynvvideocodec/index.html), [NVENC](https://developer.nvidia.com/video-codec-sdk)) | Video-emitting writers (needs an NVIDIA GPU) |
+| `video` | Video codec support ([PyNvVideoCodec](https://docs.nvidia.com/video-technologies/pynvvideocodec/index.html), [NVENC](https://developer.nvidia.com/video-codec-sdk)) | Video-emitting writers (needs an NVIDIA GPU; supports H.264, HEVC, and AV1) |
 | `all-cpu` | `s3`, `ovstorage`, `lerobot`, `cosmos-multiview`, and `umi` | Full CPU-only runtime feature set (no GPU) |
 | `all-gpu` | `all-cpu` plus `gpu` and `video` | Full GPU runtime feature set |
 | `all` | Alias for `all-gpu` plus test tooling (implies GPU/CUDA) | Everything optional; use `all-cpu` for GPU-free |
 
 GPU codec extras require compatible CUDA 12, driver, and GPU support.
 
-Development and test tooling ship in the `test`, `dev-cpu`, and `dev` extras;
-see `pyproject.toml` for their exact contents.
+Development and test tooling ship in the `test`, `dev-cpu`, and `dev` extras.
+The documentation toolchain is the `docs` dependency group, which is used from
+a checkout and is not published with the package. See `pyproject.toml` for
+their exact contents.
 
 ### ovstorage connections
 

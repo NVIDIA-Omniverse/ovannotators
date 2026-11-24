@@ -5,9 +5,9 @@
   "metadata": {
     "component": {
       "type": "library",
-      "bom-ref": "pkg:pypi/ovannotators@0.2.0",
+      "bom-ref": "pkg:pypi/ovannotators@0.3.0",
       "name": "ovannotators",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "licenses": [
         {
           "license": {
@@ -22,7 +22,7 @@
       "type": "library",
       "bom-ref": "pkg:pypi/numpy",
       "name": "numpy",
-      "version": "locked per supported Python version",
+      "version": "2.4.6 (Python 3.11); 2.2.6 (Python 3.12)",
       "scope": "required",
       "licenses": [
         {
@@ -34,7 +34,7 @@
       "type": "library",
       "bom-ref": "pkg:pypi/Pillow",
       "name": "Pillow",
-      "version": ">=12.3.0",
+      "version": "13.0.0",
       "scope": "required",
       "licenses": [
         {
@@ -48,7 +48,7 @@
       "type": "library",
       "bom-ref": "pkg:pypi/openexr",
       "name": "openexr",
-      "version": "locked per supported Python version",
+      "version": "3.4.15",
       "scope": "required",
       "licenses": [
         {
@@ -62,7 +62,7 @@
       "type": "library",
       "bom-ref": "pkg:pypi/warp-lang",
       "name": "warp-lang",
-      "version": "locked per supported Python version",
+      "version": "1.17.0",
       "scope": "required",
       "licenses": [
         {
@@ -70,13 +70,14 @@
             "id": "Apache-2.0"
           }
         }
-      ]
+      ],
+      "description": "NVIDIA open-source package."
     },
     {
       "type": "library",
       "bom-ref": "pkg:pypi/boto3",
       "name": "boto3",
-      "version": "locked per supported Python version",
+      "version": "1.43.93",
       "scope": "optional",
       "licenses": [
         {
@@ -84,7 +85,8 @@
             "id": "Apache-2.0"
           }
         }
-      ]
+      ],
+      "description": "Optional extra s3."
     },
     {
       "type": "library",
@@ -98,13 +100,14 @@
             "id": "Apache-2.0"
           }
         }
-      ]
+      ],
+      "description": "Optional extra ovstorage. NVIDIA open-source package."
     },
     {
       "type": "library",
       "bom-ref": "pkg:pypi/pyarrow",
       "name": "pyarrow",
-      "version": "==25.0.1 for cosmos-multiview; otherwise locked",
+      "version": "25.0.1",
       "scope": "optional",
       "licenses": [
         {
@@ -112,13 +115,14 @@
             "id": "Apache-2.0"
           }
         }
-      ]
+      ],
+      "description": "Optional extras lerobot, cosmos-multiview."
     },
     {
       "type": "library",
-      "bom-ref": "pkg:pypi/pylance@11.0.0",
+      "bom-ref": "pkg:pypi/pylance",
       "name": "pylance",
-      "version": "==11.0.0",
+      "version": "11.0.0",
       "scope": "optional",
       "licenses": [
         {
@@ -126,27 +130,14 @@
             "id": "Apache-2.0"
           }
         }
-      ]
+      ],
+      "description": "Optional extra cosmos-multiview (also used by LeRobotLanceWriter)."
     },
     {
       "type": "library",
-      "bom-ref": "pkg:pypi/nvidia-nvimgcodec-cu12@0.9.0.20",
-      "name": "nvidia-nvimgcodec-cu12",
-      "version": "0.9.0.20",
-      "scope": "optional",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0"
-          }
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "bom-ref": "pkg:pypi/PyNvVideoCodec@2.2.3",
-      "name": "PyNvVideoCodec",
-      "version": "2.2.3",
+      "bom-ref": "pkg:pypi/zarr",
+      "name": "zarr",
+      "version": "2.18.7",
       "scope": "optional",
       "licenses": [
         {
@@ -154,7 +145,68 @@
             "id": "MIT"
           }
         }
-      ]
+      ],
+      "description": "Optional extra umi."
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/numcodecs",
+      "name": "numcodecs",
+      "version": "0.12.1",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "description": "Optional extra umi."
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/imagecodecs-numcodecs",
+      "name": "imagecodecs-numcodecs",
+      "version": "2026.3.6 (Python 3.11); 2026.8.16 (Python 3.12)",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ],
+      "description": "Optional extra umi."
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/nvidia-nvimgcodec-cu12",
+      "name": "nvidia-nvimgcodec-cu12",
+      "version": "0.9.0.20",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "name": "NVIDIA Software License Agreement"
+          }
+        }
+      ],
+      "description": "Optional extra gpu. NVIDIA product. The wheel's METADATA License field says Apache License 2.0, but the license file it ships is the NVIDIA Software License Agreement. Not open-source software, so it has no entry in NOTICE-3rdparty.txt."
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/PyNvVideoCodec",
+      "name": "PyNvVideoCodec",
+      "version": "2.2.2",
+      "scope": "optional",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "description": "Optional extra video. NVIDIA open-source package. The wheel includes portions of FFmpeg under the GNU LGPL; see the wheel's NOTICES.txt."
     }
   ]
 }

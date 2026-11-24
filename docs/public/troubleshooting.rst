@@ -17,10 +17,11 @@ An optional backend or writer fails at import time
 
 Match the feature to its extra: ``s3`` for `Amazon S3
 <https://aws.amazon.com/s3/>`_, ``ovstorage`` for a built ovstorage Stack,
-``lerobot`` for `LeRobot <https://huggingface.co/docs/lerobot/index>`_,
-``cosmos-multiview`` for Cosmos 3.5 Lance tables, and
-``video`` for
-`NVENC <https://developer.nvidia.com/video-codec-sdk>`_ output. Re-run the
+``lerobot`` for `LeRobot <https://huggingface.co/docs/lerobot/index>`_ and
+native ``lerobot_v3`` Parquet tables, ``cosmos-multiview`` for Cosmos 3.5 and
+native ``lerobot_lance`` Lance tables, and ``video`` for
+`NVENC <https://developer.nvidia.com/video-codec-sdk>`_ output (H.264, HEVC,
+and AV1). Re-run the
 failing command through the same environment used for installation, for example
 ``uv run python ...`` after ``uv sync --extra <name>``.
 

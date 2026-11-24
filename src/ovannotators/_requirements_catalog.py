@@ -129,6 +129,17 @@ def _register_builtins() -> None:
             (DatasetProfile("default", "RGB and 8-bit conditioning videos"),),
         ),
         (
+            p.LeRobotV3Writer,
+            p.LeRobotV3WriterConfig,
+            (
+                DatasetProfile(
+                    "default",
+                    "Native LeRobot 0.7.0 v3 dataset format",
+                    {"fps": 30},
+                ),
+            ),
+        ),
+        (
             p.CosmosMultiviewWriter,
             p.CosmosMultiviewWriterConfig,
             (
@@ -224,7 +235,9 @@ def _resolve(
             raise ConfigurationError("camera_keys must be non-empty and unique")
         temporal = (f"One episode; synthesized timestamps at {values['fps']} fps.",)
         representations["image"] = "uint8 RGB H.264 video"
-        notes = ("Every camera key receives the same incoming image.",)
+        notes = (
+            "Every camera key receives the same incoming image; use lerobot_v3 for independent camera streams and state/action data.",
+        )
     elif name == "cosmos_transfer":
         from ovannotators.writers.cosmos_transfer import (
             _required_vars_for_config,
@@ -243,6 +256,26 @@ def _resolve(
                 "storage": "8-bit inverse-depth H.264 conditioning",
                 "units": "clip-normalized, not physical depth",
             }
+    elif name == "lerobot_v3":
+        recommended.add("LdrColor")
+        streams = tuple(values.get("camera_stream_ids", ()))
+        cameras = len(streams) if streams else None
+        non_render = (
+            "Named robot state and action tensors with feature names, units, and representations.",
+            "Episode identity, task, embodiment, source clock, and authoritative nanosecond timestamps.",
+        )
+        temporal = (
+            "Explicit episodes; independently timed cameras aligned to configured fps.",
+        )
+        representations["image"] = {
+            "capture": "RGB uint8 named camera streams",
+            "codec": values["video_codec"],
+            "pixel_format": "gbrp" if values["video_lossless"] else "yuv420p",
+            "lossless": values["video_lossless"],
+        }
+        notes = (
+            "Camera RenderVars must be mapped to named observation streams by the producer; this profile does not declare depth support.",
+        )
     elif name == "cosmos_multiview":
         cameras = None
         materialization = values.get("materialization")

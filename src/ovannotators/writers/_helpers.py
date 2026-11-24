@@ -141,6 +141,23 @@ OVRTX_INSTANCE_MAP_DTYPE = np.dtype(
     ]
 )
 
+OVRTX_OCCLUSION_DTYPE = np.dtype(
+    [
+        ("instance_id", "<u4"),
+        ("tile_id", "<u4"),
+        ("ratio", "<f4"),
+    ]
+)
+
+OVRTX_INSTANCE_TOKEN_DTYPE = np.dtype(
+    {
+        "names": ["instance_id", "prim_token", "prototype", "instance_index"],
+        "formats": ["<u4", "<u8", "<u4", "<u4"],
+        "offsets": [0, 8, 16, 20],
+        "itemsize": 24,
+    }
+)
+
 
 def _as_id(value: Any) -> int:
     """Return a Python int id from a (4,) uint32 128-bit word array.
@@ -263,6 +280,9 @@ def decode_id_string_map(data: Any) -> dict[int, str]:
     """
     if data is None:
         return {}
+    parts = _named_parts(data)
+    if parts is not None:
+        return _decode_id_string_parts(parts)
     raw = _to_bytes(data)
     if len(raw) < 4:
         return {}
@@ -317,6 +337,13 @@ def decode_stable_id_semantic_id_map(data: Any) -> np.ndarray:
     Raises:
         ValueError: If the byte count is not a whole number of records.
     """
+    parts = _named_parts(data)
+    if parts is not None:
+        stable = parts["stable_id"].reshape(-1, 4)
+        decoded = np.zeros(len(stable), dtype=OVRTX_STABLE_SEMANTIC_ID_DTYPE)
+        decoded["stable_id"] = stable
+        decoded["semantic_id"] = parts["semantic_id"].reshape(-1, 4)
+        return decoded
     raw = _to_bytes(data)
     itemsize = OVRTX_STABLE_SEMANTIC_ID_DTYPE.itemsize
     if len(raw) % itemsize:
@@ -353,6 +380,159 @@ def decode_instance_map(data: Any) -> np.ndarray:
     return decoded
 
 
+def decode_occlusion(data: Any) -> np.ndarray:
+    """Decode ``OcclusionSD`` into per-instance occluded fractions.
+
+    ovrtx 0.5 and 0.6 deliver a tightly packed table of 12-byte records with no
+    trailing count. ovrtx 0.7 delivers named tensors ``instance_id``,
+    ``render_tile_id`` and ``occlusion_ratio``. ``ratio`` is the occluded
+    fraction in ``[0, 1]``; a negative ratio means the renderer sampled no hits
+    for that instance.
+
+    Args:
+        data: Raw uint8 buffer, bytes, NumPy array, or Warp array, or the
+            ``{"tensors": ..., "params": ...}`` render var.
+
+    Returns:
+        Structured NumPy array using :data:`OVRTX_OCCLUSION_DTYPE`.
+
+    Raises:
+        ValueError: If the byte count is not a whole number of records.
+    """
+    parts = _named_parts(data)
+    if parts is not None:
+        decoded = np.zeros(parts["instance_id"].size, dtype=OVRTX_OCCLUSION_DTYPE)
+        decoded["instance_id"] = parts["instance_id"].reshape(-1)
+        decoded["tile_id"] = parts["render_tile_id"].reshape(-1)
+        decoded["ratio"] = parts["occlusion_ratio"].reshape(-1)
+        return decoded
+    raw = _to_bytes(data)
+    itemsize = OVRTX_OCCLUSION_DTYPE.itemsize
+    if len(raw) % itemsize:
+        raise ValueError(
+            f"OcclusionSD has {len(raw)} bytes; expected a multiple of {itemsize}"
+        )
+    return np.frombuffer(raw, dtype=OVRTX_OCCLUSION_DTYPE).copy()
+
+
+def decode_instance_token_map(data: Any) -> np.ndarray:
+    """Decode ``InstanceIdTokenMapSD`` into its header and instance records.
+
+    ovrtx 0.5 and 0.6 deliver a tightly packed table of 24-byte records with no
+    trailing count. The first record is a header: ``instance_id`` is the number
+    of records that follow, and ``prim_token`` holds the maximum renderer
+    instance id in its high 32 bits and the minimum in its low 32 bits. ovrtx
+    0.7 delivers the records as named tensors and the instance-id range as the
+    ``min_instance_id`` and ``max_instance_id`` params; the same header is
+    rebuilt from them.
+
+    Args:
+        data: Raw uint8 buffer, bytes, NumPy array, or Warp array, or the
+            ``{"tensors": ..., "params": ...}`` render var.
+
+    Returns:
+        Structured NumPy array using :data:`OVRTX_INSTANCE_TOKEN_DTYPE`,
+        header first.
+
+    Raises:
+        ValueError: If the byte count is not a whole number of records, or the
+            header count does not match the records.
+    """
+    parts = _named_parts(data)
+    if parts is not None:
+        count = parts["instance_id"].size
+        records = np.zeros(count + 1, dtype=OVRTX_INSTANCE_TOKEN_DTYPE)
+        records[0]["instance_id"] = count
+        records[0]["prim_token"] = (
+            int(parts["max_instance_id"].reshape(-1)[0]) << 32
+        ) | int(parts["min_instance_id"].reshape(-1)[0])
+        records["instance_id"][1:] = parts["instance_id"].reshape(-1)
+        records["prim_token"][1:] = parts["prim_token"].reshape(-1)
+        records["prototype"][1:] = parts["prototype_index"].reshape(-1)
+        records["instance_index"][1:] = parts["instance_index"].reshape(-1)
+        return records
+    raw = _to_bytes(data)
+    itemsize = OVRTX_INSTANCE_TOKEN_DTYPE.itemsize
+    if len(raw) % itemsize:
+        raise ValueError(
+            f"InstanceIdTokenMapSD has {len(raw)} bytes; expected a multiple of {itemsize}"
+        )
+    records = np.frombuffer(raw, dtype=OVRTX_INSTANCE_TOKEN_DTYPE).copy()
+    if not len(records) or int(records[0]["instance_id"]) != len(records) - 1:
+        raise ValueError("InstanceIdTokenMapSD header count does not match records")
+    return records
+
+
+def _decoded(value: Any, dtype: np.dtype, decode: Any) -> np.ndarray:
+    """Return ``value`` as a ``dtype`` array, decoding it when still raw."""
+    if isinstance(value, np.ndarray) and value.dtype == dtype:
+        return value
+    return decode(value)
+
+
+_OCCLUSION_VARS: tuple[str, ...] = (
+    "OcclusionSD",
+    "InstanceIdTokenMapSD",
+    "InstanceMap",
+    "StableIdSemanticIdMap",
+)
+
+
+def occlusion_by_stable_id(
+    render_vars: dict[str, Any],
+) -> dict[tuple[int, ...], float] | None:
+    """Resolve ``OcclusionSD`` ratios to the ids carried by semantic boxes.
+
+    ``OcclusionSD`` is keyed by renderer instance id, while
+    ``SemanticBoundingBox3D`` carries 128-bit stable ids. A renderer instance id
+    minus the minimum id in ``InstanceIdTokenMapSD`` indexes ``InstanceMap``,
+    whose value indexes ``StableIdSemanticIdMap``. When several renderer
+    instances share a stable id, their valid ratios are averaged.
+
+    Args:
+        render_vars (dict[str, Any]): Extracted render vars for a frame; needs
+            ``OcclusionSD``, ``InstanceIdTokenMapSD``, ``InstanceMap`` and
+            ``StableIdSemanticIdMap``.
+
+    Returns:
+        dict[tuple[int, ...], float] | None: ``{stable_id_words: ratio}`` for
+        every instance with a valid (non-negative) ratio, or ``None`` when any
+        required render var is absent.
+    """
+    if any(name not in render_vars for name in _OCCLUSION_VARS):
+        return None
+    occlusion = _decoded(
+        render_vars["OcclusionSD"], OVRTX_OCCLUSION_DTYPE, decode_occlusion
+    )
+    tokens = _decoded(
+        render_vars["InstanceIdTokenMapSD"],
+        OVRTX_INSTANCE_TOKEN_DTYPE,
+        decode_instance_token_map,
+    )
+    instance_map = _decoded(
+        render_vars["InstanceMap"], OVRTX_INSTANCE_MAP_DTYPE, decode_instance_map
+    )
+    stable = _decoded(
+        render_vars["StableIdSemanticIdMap"],
+        OVRTX_STABLE_SEMANTIC_ID_DTYPE,
+        decode_stable_id_semantic_id_map,
+    )
+    min_instance_id = int(tokens[0]["prim_token"]) & 0xFFFFFFFF
+    invalid = 0xFFFFFFFF
+    sums: dict[tuple[int, ...], list[float]] = defaultdict(list)
+    for record in occlusion:
+        ratio = float(record["ratio"])
+        index = int(record["instance_id"]) - min_instance_id
+        if ratio < 0.0 or not 0 <= index < len(instance_map):
+            continue
+        table_index = int(instance_map[index]["stable_semantic_index"])
+        if table_index == invalid or table_index >= len(stable):
+            continue
+        key = tuple(int(w) for w in stable[table_index]["stable_id"])
+        sums[key].append(ratio)
+    return {key: sum(values) / len(values) for key, values in sums.items()}
+
+
 def _to_bytes(data: Any) -> bytes:
     """Coerce a raw payload (bytes, NumPy, Warp) to bytes.
 
@@ -371,6 +551,80 @@ def _to_bytes(data: Any) -> bytes:
     return bytes(data)
 
 
+def _named_parts(data: Any) -> dict[str, np.ndarray] | None:
+    """Return the named tensors and params of an ovrtx 0.7 annotator output.
+
+    From ovrtx 0.7, annotators arrive as named tensors and params, which
+    :meth:`OvrtxOutput.extract` returns as ``{"tensors": ..., "params": ...}``.
+
+    Args:
+        data: An extracted render var.
+
+    Returns:
+        The tensors and params merged into one name-to-NumPy mapping, or
+        ``None`` when ``data`` is not in that form (an ovrtx 0.5 or 0.6 byte
+        payload, or an already-decoded array).
+    """
+    if not isinstance(data, dict) or "tensors" not in data:
+        return None
+    parts = {**data["tensors"], **data.get("params", {})}
+    return {name: _to_numpy(value) for name, value in parts.items()}
+
+
+def _valid_rows(parts: dict[str, np.ndarray], rows: int) -> int:
+    """Return how many leading rows of a capacity-sized table are valid.
+
+    ovrtx sizes bounding-box tables to a capacity and reports the filled
+    count in ``valid_count``; rows past it are undefined.
+    """
+    count = parts.get("valid_count")
+    if count is None or count.size == 0:
+        return rows
+    return min(int(count.reshape(-1)[0]), rows)
+
+
+def _decode_id_string_parts(parts: dict[str, np.ndarray]) -> dict[int, str]:
+    """Decode an ovrtx 0.7 ``id``/``label_offsets``/``label_data`` table."""
+    ids = parts["id"].reshape(-1, 4)
+    offsets = parts["label_offsets"].reshape(-1).astype(np.int64)
+    blob = parts["label_data"].tobytes()
+    mapping: dict[int, str] = {}
+    for row, (start, end) in enumerate(zip(offsets[:-1], offsets[1:])):
+        if row >= len(ids) or end > len(blob):
+            break
+        mapping[int(ids[row][0])] = blob[start:end].decode("utf-8", "replace").rstrip()
+    return mapping
+
+
+def _decode_bbox_parts(
+    parts: dict[str, np.ndarray], dtype: np.dtype, axes: str
+) -> np.ndarray:
+    """Pack ovrtx 0.7 bounding-box tensors into a legacy structured array.
+
+    Args:
+        parts: Named tensors ``id``, ``semantic_id``, ``extent`` (``(N, 2,
+            len(axes))`` min/max corners), optional ``object_to_world``, and
+            ``valid_count``.
+        dtype: :data:`OVRTX_BBOX2D_DTYPE` or :data:`OVRTX_BBOX3D_DTYPE`.
+        axes: ``"xy"`` or ``"xyz"``.
+
+    Returns:
+        A structured array of the valid boxes.
+    """
+    ids = parts["id"].reshape(-1, 4)
+    count = _valid_rows(parts, len(ids))
+    extent = parts["extent"].reshape(len(ids), 2, len(axes))[:count]
+    decoded = np.zeros(count, dtype=dtype)
+    decoded["instance_id"] = ids[:count]
+    decoded["semantic_id"] = parts["semantic_id"].reshape(-1, 4)[:count]
+    for axis_index, axis in enumerate(axes):
+        decoded[f"{axis}_min"] = extent[:, 0, axis_index]
+        decoded[f"{axis}_max"] = extent[:, 1, axis_index]
+    if "transform" in dtype.names and "object_to_world" in parts:
+        decoded["transform"] = parts["object_to_world"].reshape(-1, 4, 4)[:count]
+    return decoded
+
+
 def decode_bbox_2d(data: Any) -> Any:
     """Decode a ``SemanticBoundingBox2D*`` payload into a structured array.
 
@@ -387,6 +641,9 @@ def decode_bbox_2d(data: Any) -> Any:
     """
     if isinstance(data, np.ndarray) and data.dtype == OVRTX_BBOX2D_DTYPE:
         return _to_warp_array(data)
+    parts = _named_parts(data)
+    if parts is not None:
+        return _to_warp_array(_decode_bbox_parts(parts, OVRTX_BBOX2D_DTYPE, "xy"))
     raw = _to_bytes(data)
     if len(raw) < 4:
         return _to_warp_array(np.zeros(0, dtype=OVRTX_BBOX2D_DTYPE))
@@ -412,6 +669,9 @@ def decode_bbox_3d(data: Any) -> Any:
     """
     if isinstance(data, np.ndarray) and data.dtype == OVRTX_BBOX3D_DTYPE:
         return _to_warp_array(data)
+    parts = _named_parts(data)
+    if parts is not None:
+        return _to_warp_array(_decode_bbox_parts(parts, OVRTX_BBOX3D_DTYPE, "xyz"))
     raw = _to_bytes(data)
     if len(raw) < 4:
         return _to_warp_array(np.zeros(0, dtype=OVRTX_BBOX3D_DTYPE))
@@ -419,6 +679,44 @@ def decode_bbox_3d(data: Any) -> Any:
     size = num_boxes * OVRTX_BBOX3D_DTYPE.itemsize
     decoded = np.frombuffer(raw[:size], dtype=OVRTX_BBOX3D_DTYPE).copy()
     return _to_warp_array(decoded)
+
+
+# ovrtx 0.7 CameraParams param names for each legacy record field.
+_CAMERA_PARAM_FIELDS = {
+    "view_transform": "view_matrix",
+    "projection": "projection_matrix",
+    "meters_per_scene_unit": "meters_per_scene_unit",
+    "resolution": "render_product_resolution",
+    "clipping_plane": "near_far",
+    "focal_length": "focal_length",
+    "focal_distance": "focal_distance",
+    "f_stop": "f_stop",
+    "fov_x": "fov_x_radians",
+    "fisheye_nominal_width": "ftheta_width",
+    "fisheye_nominal_height": "ftheta_height",
+    "fisheye_max_fov": "ftheta_max_fov",
+    "lens_p": "lens_p",
+    "lens_s": "lens_s",
+}
+
+
+def _decode_camera_params_parts(parts: dict[str, np.ndarray]) -> np.ndarray:
+    """Pack ovrtx 0.7 ``CameraParams`` params into the legacy 1-record array."""
+    decoded = np.zeros(1, dtype=OVRTX_CAMERA_PARAMS_DTYPE)
+    for field, name in _CAMERA_PARAM_FIELDS.items():
+        if name in parts:
+            decoded[field] = parts[name].reshape(decoded[field].shape)
+    if "camera_model" in parts:
+        decoded["projection_model"] = parts["camera_model"].tobytes().rstrip(b"\0")
+    if "ftheta_cx" in parts and "ftheta_cy" in parts:
+        decoded["fisheye_optical_centre"] = [
+            parts["ftheta_cx"].reshape(-1)[0],
+            parts["ftheta_cy"].reshape(-1)[0],
+        ]
+    poly = [parts.get(f"ftheta_poly_{c}") for c in "abcdef"]
+    if all(p is not None for p in poly):
+        decoded["fisheye_polynomial"] = [p.reshape(-1)[0] for p in poly]
+    return decoded
 
 
 def decode_camera_params(data: Any) -> Any:
@@ -435,6 +733,9 @@ def decode_camera_params(data: Any) -> Any:
     """
     if isinstance(data, np.ndarray) and data.dtype == OVRTX_CAMERA_PARAMS_DTYPE:
         return _to_warp_array(data)
+    parts = _named_parts(data)
+    if parts is not None:
+        return _to_warp_array(_decode_camera_params_parts(parts))
     raw = _to_bytes(data)
     itemsize = OVRTX_CAMERA_PARAMS_DTYPE.itemsize
     decoded = np.frombuffer(raw[:itemsize], dtype=OVRTX_CAMERA_PARAMS_DTYPE).copy()
@@ -456,7 +757,7 @@ def id_label_map_from_render_vars(
     sid_map = render_vars.get("SemanticIdMap")
     if sid_map is None:
         return None
-    if isinstance(sid_map, dict):
+    if isinstance(sid_map, dict) and "tensors" not in sid_map:
         return sid_map
     return decode_semantic_id_map(sid_map)
 
@@ -480,7 +781,7 @@ def id_prim_path_map_from_render_vars(
     stable_map = render_vars.get("StableIdMap")
     if stable_map is None:
         return None
-    if isinstance(stable_map, dict):
+    if isinstance(stable_map, dict) and "tensors" not in stable_map:
         return stable_map
     return decode_id_string_map(stable_map)
 
@@ -541,10 +842,12 @@ def iter_bboxes_3d(
 
     The ovrtx payload (:data:`OVRTX_BBOX3D_DTYPE`) stores per-box object-space
     ``[x/y/z]_min`` / ``[x/y/z]_max`` extents plus a 4x4 local-to-world
-    ``transform``. These are converted to the ``center`` / ``extent`` /
-    ``rotation`` representation the writers consume, using the convention
-    ``world = R @ local + T`` where ``R = transform[:3, :3]`` and
-    ``T = transform[:3, 3]``. The resulting boxes are therefore in world space
+    ``transform``. The transform multiplies row vectors
+    (``world = [local, 1] @ transform``), so its translation is the last row.
+    It is converted to the ``center`` / ``extent`` / ``rotation``
+    representation the writers consume, using the column-vector convention
+    ``world = R @ local + T`` where ``R = transform[:3, :3].T`` and
+    ``T = transform[3, :3]``. The resulting boxes are therefore in world space
     (``coordinate_system="world"``).
 
     Args:
@@ -569,8 +872,8 @@ def iter_bboxes_3d(
         lo = np.array([row["x_min"], row["y_min"], row["z_min"]], dtype=np.float64)
         hi = np.array([row["x_max"], row["y_max"], row["z_max"]], dtype=np.float64)
         transform = np.asarray(row["transform"], dtype=np.float64).reshape(4, 4)
-        rotation = transform[:3, :3]
-        translation = transform[:3, 3]
+        rotation = transform[:3, :3].T
+        translation = transform[3, :3]
         center = rotation @ ((lo + hi) / 2.0) + translation
         yield BBox3D(
             center=center,
@@ -593,12 +896,13 @@ def extract_camera_params(arr: Any) -> CameraParams:
     """Build a :class:`~ovannotators.types.CameraParams` from a render var.
 
     The ovrtx payload (:data:`OVRTX_CAMERA_PARAMS_DTYPE`) provides a 4x4
-    camera-to-world ``view_transform``, a 4x4 ``projection`` matrix, the render
+    world-to-camera ``view_transform`` that multiplies row vectors (translation
+    in the last row), a 4x4 ``projection`` matrix, the render
     ``resolution``, ``clipping_plane`` (near/far) and a horizontal ``fov_x``.
     The pinhole intrinsics ``K`` are derived from ``fov_x`` and ``resolution``
     (square pixels, principal point at the image centre); the world-to-camera
-    ``R`` / ``t`` are derived by inverting ``view_transform``; ``fov_y`` is
-    derived from ``fov_x`` and the aspect ratio (square pixels).
+    ``R`` / ``t`` are read from ``view_transform`` (``R`` is the transpose of
+    its upper-left 3x3, ``t`` its last row); ``fov_y`` is derived from ``fov_x`` and the aspect ratio (square pixels).
 
     Args:
         arr: ``CameraParams`` render var (structured array or raw buffer).
@@ -628,23 +932,97 @@ def extract_camera_params(arr: Any) -> CameraParams:
     # Vertical FOV from the aspect ratio (square pixels => fy == fx).
     fov_y = 2.0 * math.atan((height / 2.0) / fx) if fx > 0 else 0.0
 
-    # view_transform is camera-to-world; world-to-camera is its inverse.
+    # view_transform is world-to-camera and multiplies row vectors:
+    # cam = [world, 1] @ view, so R_col = view[:3, :3].T and t = view[3, :3].
     view = np.asarray(scalar["view_transform"], dtype=np.float64).reshape(4, 4)
-    try:
-        world_to_cam = np.linalg.inv(view)
-    except np.linalg.LinAlgError:
-        world_to_cam = np.eye(4, dtype=np.float64)
 
     return CameraParams(
         K=K,
-        R=world_to_cam[:3, :3],
-        t=world_to_cam[:3, 3],
+        R=view[:3, :3].T,
+        t=view[3, :3],
         resolution=Resolution(width=width, height=height),
         near=near,
         far=far,
         fov_x=fov_x,
         fov_y=fov_y,
     )
+
+
+# ovrtx cameras follow USD: the camera looks down -Z with +Y up. BOP and KITTI
+# use the OpenCV camera frame (+Z forward, +Y down), which is the frame
+# ``CameraParams.K`` projects from. Rotating 180 degrees about X maps one to the
+# other.
+_USD_TO_OPENCV_CAMERA = np.diag([1.0, -1.0, -1.0])
+
+
+def world_to_opencv_camera(cam: CameraParams) -> tuple[np.ndarray, np.ndarray]:
+    """Return the world-to-camera ``(R, t)`` in the OpenCV camera frame.
+
+    Args:
+        cam (CameraParams): Camera from :func:`extract_camera_params`, whose
+            ``R`` / ``t`` map world points into the USD camera frame.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: ``(R, t)`` with ``R`` of shape ``(3, 3)``
+        and ``t`` of shape ``(3,)``, so ``p_cam = R @ p_world + t`` has +Z
+        forward and +Y down, in scene units.
+    """
+    return _USD_TO_OPENCV_CAMERA @ cam.R, _USD_TO_OPENCV_CAMERA @ cam.t
+
+
+def rotation_and_scale(rotation: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Split a box transform's 3x3 block into a unit-axis rotation and scale.
+
+    A box transform carries any object scale in its 3x3 block, so the columns
+    of ``rotation`` can have lengths other than one. Dividing each column by its
+    length leaves the rotation for a rotation-times-scale block (no shear).
+
+    Args:
+        rotation (np.ndarray): ``(3, 3)`` rotation whose columns are the object
+            axes, possibly scaled.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: ``(unit_rotation, scale)``, a ``(3, 3)``
+        array with unit-length columns and the ``(3,)`` per-axis scale. A
+        zero-length column is returned unchanged with scale 0.
+    """
+    rotation = np.asarray(rotation, dtype=np.float64)
+    scale = np.sqrt((rotation * rotation).sum(axis=0))
+    return rotation / np.where(scale > 0.0, scale, 1.0), scale
+
+
+def rotation_without_scale(rotation: np.ndarray) -> np.ndarray:
+    """Strip object scale from a rotation by normalizing each axis column.
+
+    Args:
+        rotation (np.ndarray): ``(3, 3)`` rotation whose columns are the object
+            axes, possibly scaled.
+
+    Returns:
+        np.ndarray: ``(3, 3)`` array with unit-length columns. A zero-length
+        column is returned unchanged.
+    """
+    return rotation_and_scale(rotation)[0]
+
+
+def pose_in_opencv_camera(
+    cam: CameraParams, rotation: np.ndarray, center: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Express a world-space pose in the OpenCV camera frame.
+
+    Args:
+        cam (CameraParams): Camera from :func:`extract_camera_params`.
+        rotation (np.ndarray): ``(3, 3)`` object-to-world rotation (columns are
+            the object axes).
+        center (np.ndarray): ``(3,)`` world-space position.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray]: ``(rotation_cam, center_cam)``, the
+        object-to-camera rotation and the position in the camera frame, in
+        scene units.
+    """
+    r_w2c, t_w2c = world_to_opencv_camera(cam)
+    return r_w2c @ rotation, r_w2c @ center + t_w2c
 
 
 def point_cloud_from_depth(

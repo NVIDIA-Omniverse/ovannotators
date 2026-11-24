@@ -603,6 +603,25 @@ class TestGetVideoEncoder:
             enc = get_video_encoder("", 30, 64, 64)
             assert isinstance(enc, NvVideoEncoder)
 
+    def test_av1_and_gop_options_forwarded_to_pynvvideocodec(self):
+        mock_pynv = MagicMock()
+        mock_inst = MagicMock()
+        # OBU_SEQUENCE_HEADER (type 1) + OBU_FRAME keyframe (type 6)
+        av1_payload = b"\x0a\x08" + b"\x00" * 8 + b"\x32\x04\x10\x11\x22\x33"
+        mock_inst.Encode.return_value = av1_payload
+        mock_inst.EndEncode.return_value = b""
+        mock_pynv.CreateEncoder.return_value = mock_inst
+        with patch.dict("sys.modules", {"PyNvVideoCodec": mock_pynv}):
+            enc = get_video_encoder("", 30, 64, 64, codec="av1", preset="P4", gop=15)
+            enc.write_frame(np.zeros((64, 64, 3), dtype=np.uint8))
+            mp4 = enc.close()
+        _, kwargs = mock_pynv.CreateEncoder.call_args
+        assert kwargs["codec"] == "av1"
+        assert kwargs["preset"] == "P4"
+        assert kwargs["gop"] == 15
+        assert b"av01" in mp4
+        assert b"av1C" in mp4
+
 
 # ---------------------------------------------------------------------------
 # NvImageCodecBackend — GPU JPEG params and None-result guard

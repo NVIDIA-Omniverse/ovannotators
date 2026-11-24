@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import io
 import json
 from dataclasses import dataclass, field
@@ -25,6 +24,10 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
+from ovannotators._internal.lerobot_common import (
+    encode_video_frames,
+    require_pyarrow,
+)
 from ovannotators._internal.video_config import (
     VideoCodec,
     VideoPreset,
@@ -60,7 +63,8 @@ class LeRobotWriterConfig:
             ``videos/…/observation.images.{key}/episode_XXXXXX.mp4`` file and
             a corresponding column in the parquet.
         frames_per_chunk: Number of frames per parquet chunk file.
-        video_codec: ``"h264"`` (default) or ``"hevc"``.
+        video_codec: ``"h264"`` (default), ``"hevc"``, or ``"av1"`` (Ada
+            Lovelace or newer GPU).
         video_lossless: Preserve normalized uint8 RGB with HEVC 4:4:4.
             Requires even, fixed dimensions and a compatible video reader.
         video_preset: Optional NVENC P1 through P7; lossless defaults to P5.
@@ -315,34 +319,11 @@ def _encode_video(
     preset: VideoPreset | None = None,
 ) -> bytes:
     """Encode a list of (H, W, 3) uint8 RGB frames to MP4 bytes via PyNvVideoCodec."""
-    if not frames:
-        return b""
-    from ovannotators._internal.codecs import get_video_encoder
-
-    h, w = frames[0].shape[:2]
-    encoder = get_video_encoder(
-        "", fps, w, h, codec=codec, lossless=lossless, preset=preset
+    return encode_video_frames(
+        frames, fps, codec=codec, lossless=lossless, preset=preset
     )
-    try:
-        for frame in frames:
-            encoder.write_frame(frame)
-    except BaseException:
-        # Release the NVENC session now; the original error takes precedence.
-        with contextlib.suppress(Exception):
-            encoder.close()
-        raise
-    return encoder.close()
 
 
 def _require_pyarrow() -> tuple[Any, Any]:
     """Return (pyarrow, pyarrow.parquet) or raise ImportError."""
-    try:
-        import pyarrow as pa  # type: ignore[import]
-        import pyarrow.parquet as pq  # type: ignore[import]
-
-        return pa, pq
-    except ImportError as exc:
-        raise ImportError(
-            "pyarrow is required for LeRobotWriter. "
-            "Install it with: pip install pyarrow"
-        ) from exc
+    return require_pyarrow("LeRobotWriter")

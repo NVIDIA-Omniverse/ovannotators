@@ -21,6 +21,7 @@ import ovannotators as o
         "bop",
         "lerobot",
         "cosmos_transfer",
+        "lerobot_v3",
         "cosmos_multiview",
     ],
 )
@@ -149,7 +150,31 @@ def test_legacy_camera_keys_do_not_claim_independent_views():
     assert "same incoming image" in r.notes[0]
 
 
-def test_episode_profiles_do_not_invent_stream_schema():
+def test_episode_profiles_do_not_invent_robot_or_stream_schema():
+    r = o.describe_requirements("lerobot_v3")
+    assert r.required_options == ("camera_stream_ids", "state", "action")
+    assert r.minimum_camera_views is None
+    assert r.non_render_inputs and r.temporal_requirements
+    assert r.recommended_render_vars == {"LdrColor"}
+    feature = dict(
+        stream_id="observation.state",
+        feature_names=["joint"],
+        units=["rad"],
+        representation="joint_position",
+        shape=[1],
+    )
+    action = {**feature, "stream_id": "action"}
+    r = o.describe_requirements(
+        "lerobot_v3",
+        camera_stream_ids=["front", "wrist"],
+        state=feature,
+        action=action,
+        repo_id="team/dataset",
+    )
+    assert r.minimum_camera_views == 2
+    assert r.camera_stream_ids == ("front", "wrist")
+    assert r.config.state.feature_names == ("joint",)
+    assert r.config.fps == 30
     assert o.describe_requirements("cosmos_multiview").minimum_camera_views is None
 
 

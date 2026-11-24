@@ -1,0 +1,9 @@
+# LeRobot-Lance canonical-loader conformance environment (Python 3.12+ only).
+# Installed only in isolated conformance virtualenvs — NOT a runtime dependency
+# of ovannotators (LeRobotLanceWriter writes the Lance tables natively via pylance).
+# Source tag v0.3.1 resolves to 40bcb659a52df5511cb1c8035b80775a2ff773a7.
+lerobot-lancedb==0.3.1
+lerobot[dataset]==0.7.0
+# Security floors matching lerobot-v3-conformance.txt.
+datasets>=5.2
+fsspec>=2026.6

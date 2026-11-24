@@ -35,6 +35,11 @@ from ovannotators.profile_writers.cosmos_multiview import (
     CosmosValidationFinding,
     CosmosValidationRecord,
 )
+from ovannotators.profile_writers.lerobot_lance import (
+    LeRobotLanceFeatureSpec,
+    LeRobotLanceWriter,
+    LeRobotLanceWriterConfig,
+)
 from ovannotators.profile_writers.groot_lerobot_v2 import (
     GROOT_RELEASE_COMMIT,
     GROOT_RELEASE_TAG,
@@ -45,6 +50,12 @@ from ovannotators.profile_writers.groot_lerobot_v2 import (
     GrootStateModality,
     GrootVideoModality,
     validate_groot_lerobot_v2,
+)
+from ovannotators.profile_writers.lerobot_v3 import (
+    LeRobotV3FeatureSpec,
+    LeRobotV3Writer,
+    LeRobotV3WriterConfig,
+    validate_lerobot_v3_canonical,
 )
 from ovannotators.profile_writers.umi_replay_buffer import (
     UMIFieldSpec,
@@ -72,6 +83,12 @@ __all__ = [
     "GrootStateModality",
     "GrootVideoModality",
     "LossReport",
+    "LeRobotLanceFeatureSpec",
+    "LeRobotLanceWriter",
+    "LeRobotLanceWriterConfig",
+    "LeRobotV3FeatureSpec",
+    "LeRobotV3Writer",
+    "LeRobotV3WriterConfig",
     "NamedTensor",
     "ProfileMetadata",
     "ProfileWriter",
@@ -83,6 +100,7 @@ __all__ = [
     "sha256_bytes",
     "write_profile_artifacts",
     "validate_groot_lerobot_v2",
+    "validate_lerobot_v3_canonical",
     "UMIFieldSpec",
     "UMIReplayBufferWriter",
     "UMIReplayBufferWriterConfig",

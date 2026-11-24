@@ -73,6 +73,21 @@ def test_write_uses_full_address_and_atomic_no_overwrite(backend):
         adapter.write("failed.bin", b"payload")
 
 
+def test_atomic_create_distinguishes_conflicts_from_store_failures(backend):
+    adapter, stack = backend
+    assert adapter.write_if_absent("frame.bin", b"first") is True
+    stack.write.assert_awaited_once_with(
+        "s3://bucket/datasets/frame.bin", b"first", if_dest_exists="fail"
+    )
+    stack.write.side_effect = ovstorage.AlreadyExistsError("another producer won")
+    assert adapter.write_if_absent("frame.bin", b"second") is False
+    stack.write.side_effect = ovstorage.PreconditionFailedError("precondition failed")
+    assert adapter.write_if_absent("frame.bin", b"third") is False
+    stack.write.side_effect = RuntimeError("upload failed")
+    with pytest.raises(BackendWriteError, match="upload failed"):
+        adapter.write_if_absent("frame.bin", b"fourth")
+
+
 def test_list_follows_pages_and_returns_relative_file_paths(backend):
     adapter, stack = backend
     stack.list.side_effect = [

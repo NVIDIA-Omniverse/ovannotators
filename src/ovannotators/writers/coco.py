@@ -112,6 +112,8 @@ class COCOWriter:
         self._categories: dict[str, int] = {}
         self._ann_id: int = 1
         self._finalized: bool = False
+        self._finalization_payloads: dict[str, bytes] | None = None
+        self._finalized_paths: set[str] = set()
 
     def write_frame(
         self,
@@ -130,7 +132,10 @@ class COCOWriter:
 
         Raises:
             MissingRenderVarError: If a required render var is missing.
+            ValueError: If finalization has started.
         """
+        if self._finalization_payloads is not None:
+            raise ValueError("cannot write frames after finalization has started")
         validate_required_vars(
             self.name, self.required_render_vars, render_vars, frame_id
         )
@@ -240,46 +245,50 @@ class COCOWriter:
     def finalize(self, backend: Backend) -> None:
         """Write ``instances_{split}.json`` to the annotations directory.
 
+        Retry with the same writer and backend after a storage failure.
+        Successfully written metadata files are retained.
+
         Args:
             backend (Backend): Destination backend for the annotations file.
         """
         if self._finalized:
             return
-        self._finalized = True
-
-        backend.makedirs("annotations")
-
-        categories = [
-            {"id": cat_id, "name": name, "supercategory": ""}
-            for name, cat_id in sorted(self._categories.items(), key=lambda kv: kv[1])
-        ]
-
-        coco: dict[str, Any] = {
-            "info": {
-                "description": "ovannotators synthetic dataset",
-                "version": "1.0",
-                "year": 2024,
-            },
-            "licenses": [{"id": 0, "name": "Synthetic — no license"}],
-            "categories": categories,
-            "images": self._images,
-            "annotations": self._annotations,
-        }
-
-        split = self.config.split
-        payload = json.dumps(coco, indent=2).encode()
-        backend.write(f"annotations/instances_{split}.json", payload)
-
-        if self.config.include_panoptic:
-            panoptic_coco: dict[str, Any] = {
-                "info": coco["info"],
-                "licenses": coco["licenses"],
+        if self._finalization_payloads is None:
+            categories = [
+                {"id": cat_id, "name": name, "supercategory": ""}
+                for name, cat_id in sorted(
+                    self._categories.items(), key=lambda kv: kv[1]
+                )
+            ]
+            coco: dict[str, Any] = {
+                "info": {
+                    "description": "ovannotators synthetic dataset",
+                    "version": "1.0",
+                    "year": 2024,
+                },
+                "licenses": [{"id": 0, "name": "Synthetic — no license"}],
                 "categories": categories,
                 "images": self._images,
-                "annotations": self._panoptic_annotations,
+                "annotations": self._annotations,
             }
-            panoptic_payload = json.dumps(panoptic_coco, indent=2).encode()
-            backend.write(f"annotations/panoptic_{split}.json", panoptic_payload)
+            split = self.config.split
+            payloads = {
+                f"annotations/instances_{split}.json": json.dumps(
+                    coco, indent=2
+                ).encode()
+            }
+            if self.config.include_panoptic:
+                panoptic_coco = {**coco, "annotations": self._panoptic_annotations}
+                payloads[f"annotations/panoptic_{split}.json"] = json.dumps(
+                    panoptic_coco, indent=2
+                ).encode()
+            self._finalization_payloads = payloads
+        backend.makedirs("annotations")
+        for path, payload in self._finalization_payloads.items():
+            if path not in self._finalized_paths:
+                backend.write(path, payload)
+                self._finalized_paths.add(path)
+        self._finalized = True
 
     @staticmethod
     def _panoptic_file_name_for_image(image_file_name: str) -> str:

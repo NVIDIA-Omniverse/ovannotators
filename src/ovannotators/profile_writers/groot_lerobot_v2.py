@@ -12,6 +12,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import numpy as np
 
+from ovannotators._internal.lerobot_common import (
+    encode_video_frames,
+    require_pyarrow,
+)
 from ovannotators.exceptions import ConfigurationError
 from ovannotators.profile_writers._artifacts import (
     PROFILE_ARTIFACT_PATHS,
@@ -403,7 +407,7 @@ class GrootLeRobotV2Writer:
                 )
             if frame.shape[-1] == 4:
                 dropped_alpha = True
-            video_frames[video.key] = np.ascontiguousarray(frame[..., :3])
+            video_frames[video.key] = np.array(frame[..., :3], copy=True, order="C")
 
         for key, frame in video_frames.items():
             active.videos[key].append(frame)
@@ -668,7 +672,7 @@ class GrootLeRobotV2Writer:
             if value.dtype != np.dtype(np.float32)
             else None
         )
-        return np.asarray(value, dtype=np.float32), reordered, cast_note
+        return np.array(value, dtype=np.float32, copy=True), reordered, cast_note
 
     def _write_metadata(self, backend: Backend) -> None:
         state_dim = self.config.state_modalities[-1].end
@@ -1129,21 +1133,8 @@ def _read_jsonl(data: bytes) -> list[dict[str, Any]]:
 def _encode_video(frames: list[np.ndarray], fps: int) -> bytes:
     if not frames:
         raise ConfigurationError("cannot encode an empty video modality")
-    from ovannotators._internal.codecs import get_video_encoder
-
-    height, width = frames[0].shape[:2]
-    encoder = get_video_encoder("", fps, width, height)
-    for frame in frames:
-        encoder.write_frame(frame)
-    return encoder.close()
+    return encode_video_frames(frames, fps)
 
 
 def _require_pyarrow() -> tuple[Any, Any]:
-    try:
-        import pyarrow as pa
-        import pyarrow.parquet as pq
-    except ImportError as exc:
-        raise ImportError(
-            "pyarrow is required for GrootLeRobotV2Writer; install ovannotators[lerobot]"
-        ) from exc
-    return pa, pq
+    return require_pyarrow("GrootLeRobotV2Writer")

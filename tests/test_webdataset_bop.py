@@ -15,6 +15,7 @@
 
 """Package BOP frames as WebDataset samples and rebuild the native scenes."""
 
+import io
 import json
 import os
 import shutil
@@ -24,6 +25,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import webdataset as wds
+from PIL import Image
 
 from ovannotators import (
     BOPFrameAdapter,
@@ -40,6 +42,7 @@ from ovannotators import (
     export_finalized_dataset,
 )
 from ovannotators.capture_adapters import AdapterContext
+from ovannotators.writers.bop import MASK_LAYOUT, MASK_LAYOUT_FILE
 from tests._webdataset_reconstruction import (
     EpisodeRecords,
     assert_trees_equal,
@@ -74,7 +77,16 @@ def bop_documents_equivalent(expected: bytes, actual: bytes) -> str | None:
     return "BOP scene documents differ"
 
 
-BUILDERS = dict.fromkeys(ROLES, bop_shared_document)
+def bop_mask_layout(records: EpisodeRecords, role: str) -> bytes:
+    """Rebuild the marker; ``bop-frame-v1`` records name masks by GT index."""
+    return json.dumps(MASK_LAYOUT).encode()
+
+
+BUILDERS = {**dict.fromkeys(ROLES, bop_shared_document), "mask_layout": bop_mask_layout}
+SHARED = {
+    **{role: f"000003/{role}.json" for role in ROLES},
+    "mask_layout": f"000003/{MASK_LAYOUT_FILE}",
+}
 COMPARATORS = {"*/scene_*.json": bop_documents_equivalent}
 
 
@@ -152,10 +164,10 @@ def test_capture_restarted_frames_match_native_and_reconstruct(tmp_path, frame_v
         assert sorted(sample.members) == [
             "depth.png",
             "json",
-            "mask.000002.png",
-            "mask.000042.png",
-            "mask_visib.000002.png",
-            "mask_visib.000042.png",
+            "mask.000000.png",
+            "mask.000001.png",
+            "mask_visib.000000.png",
+            "mask_visib.000001.png",
             "metadata.json",
             "rgb.png",
         ]
@@ -164,8 +176,8 @@ def test_capture_restarted_frames_match_native_and_reconstruct(tmp_path, frame_v
             sample.members["depth.png"] == (native / f"depth/{stem}.png").read_bytes()
         )
         assert (
-            sample.members["mask_visib.000042.png"]
-            == (native / f"mask_visib/{stem}_000042.png").read_bytes()
+            sample.members["mask_visib.000000.png"]
+            == (native / f"mask_visib/{stem}_000000.png").read_bytes()
         )
         record = sample.json()
         assert (record["schema_version"], record["scene_id"]) == (1, 3)
@@ -179,13 +191,13 @@ def test_capture_restarted_frames_match_native_and_reconstruct(tmp_path, frame_v
         assert record["masks"] == [
             {
                 "obj_id": 42,
-                "mask": "mask.000042.png",
-                "mask_visib": "mask_visib.000042.png",
+                "mask": "mask.000000.png",
+                "mask_visib": "mask_visib.000000.png",
             },
             {
                 "obj_id": 2,
-                "mask": "mask.000002.png",
-                "mask_visib": "mask_visib.000002.png",
+                "mask": "mask.000001.png",
+                "mask_visib": "mask_visib.000001.png",
             },
         ]
         assert sample.metadata["metadata"] == {
@@ -195,9 +207,9 @@ def test_capture_restarted_frames_match_native_and_reconstruct(tmp_path, frame_v
         }
 
     episodes = dataset.source_paths["episodes"]
-    assert episodes["a"]["shared"] == {role: f"000003/{role}.json" for role in ROLES}
-    assert episodes["a"]["samples"]["5"]["mask.000042.png"] == (
-        "000003/mask/000005_000042.png"
+    assert episodes["a"]["shared"] == SHARED
+    assert episodes["a"]["samples"]["5"]["mask.000000.png"] == (
+        "000003/mask/000005_000000.png"
     )
     roots = reconstruct_native(dataset, tmp_path / "rebuilt", shared_builders=BUILDERS)
     for identity, native in natives.items():
@@ -215,20 +227,50 @@ def test_capture_restarted_frames_match_native_and_reconstruct(tmp_path, frame_v
         ).decode("rgb8")
     )
     assert decoded[0]["rgb.png"].shape == (120, 160, 3)
-    assert decoded[0]["mask.000042.png"].shape == (120, 160, 3)
+    assert decoded[0]["mask.000000.png"].shape == (120, 160, 3)
+
+
+def test_duplicate_model_instances_keep_distinct_masks_through_packaging(
+    tmp_path, frame_values
+):
+    values = frame_values(0)
+    for key in ("SemanticBoundingBox2DTight", "SemanticBoundingBox3D"):
+        values[key] = values[key].copy()
+        values[key]["semantic_id"][1] = values[key]["semantic_id"][0]
+    root = tmp_path / "native"
+    backend = DiskBackend(DiskBackendConfig(root))
+    writer = BOPWriter(BOPWriterConfig(**CONFIG))
+    writer.write_frame(0, values, backend)
+    writer.finalize(backend)
+    export_finalized_dataset(writer, {"a": root}, _packager(tmp_path / "out"))
+    dataset = read_packaged_dataset(tmp_path / "out", "ds")
+    sample = dataset.samples[0]
+    record = sample.json()
+    assert [entry["obj_id"] for entry in record["scene_gt"]] == [42, 42]
+    assert [entry["obj_id"] for entry in record["masks"]] == [42, 42]
+    for index, instance_id in enumerate((1, 2)):
+        for directory in ("mask", "mask_visib"):
+            component = f"{directory}.{index:06d}.png"
+            assert record["masks"][index][directory] == component
+            mask = np.asarray(Image.open(io.BytesIO(sample.members[component])))
+            np.testing.assert_array_equal(
+                mask, (values["SemanticInstanceSegmentation"] == instance_id) * 255
+            )
+    roots = reconstruct_native(dataset, tmp_path / "rebuilt", shared_builders=BUILDERS)
+    assert_trees_equal(root, roots["a"], comparators=COMPARATORS)
 
 
 def test_export_finalized_handles_optional_documents_and_masks(tmp_path, frame_values):
     natives = _natives(tmp_path, {"a": [0, 1], "b": [4]}, frame_values, **CONFIG)
     scene_a = natives["a"] / "000003"
     shutil.rmtree(scene_a / "mask")
-    (scene_a / "mask_visib/000001_000002.png").unlink()
+    (scene_a / "mask_visib/000001_000001.png").unlink()
     (scene_a / "scene_gt_info.json").unlink()
     gt = _scene(natives["b"], "scene_gt")
     gt["4"][0]["obj_id"] = 2
     (natives["b"] / "000003/scene_gt.json").write_text(json.dumps(gt, indent=2))
-    (natives["b"] / "000003/mask/000004_000042.png").unlink()
-    (natives["b"] / "000003/mask_visib/000004_000042.png").unlink()
+    (natives["b"] / "000003/mask/000004_000000.png").unlink()
+    (natives["b"] / "000003/mask_visib/000004_000000.png").unlink()
 
     writer = BOPWriter(BOPWriterConfig(**CONFIG))
     assert BOPFrameAdapter().discover_frames(natives["a"], writer) == [0, 1]
@@ -242,22 +284,22 @@ def test_export_finalized_handles_optional_documents_and_masks(tmp_path, frame_v
     assert sorted(frame1.members) == [
         "depth.png",
         "json",
-        "mask_visib.000042.png",
+        "mask_visib.000000.png",
         "metadata.json",
         "rgb.png",
     ]
     record = frame1.json()
     assert record["scene_gt_info"] is None
     assert record["masks"] == [
-        {"obj_id": 42, "mask": None, "mask_visib": "mask_visib.000042.png"},
+        {"obj_id": 42, "mask": None, "mask_visib": "mask_visib.000000.png"},
         {"obj_id": 2, "mask": None, "mask_visib": None},
     ]
-    # Two GT entries share obj_id 2 and therefore one native mask file.
     shared = samples["ds/episode-b/sample-4"].json()["masks"]
-    assert [m["mask"] for m in shared] == ["mask.000002.png", "mask.000002.png"]
+    assert [m["mask"] for m in shared] == [None, "mask.000001.png"]
     assert dataset.source_paths["episodes"]["a"]["shared"] == {
         "scene_camera": "000003/scene_camera.json",
         "scene_gt": "000003/scene_gt.json",
+        "mask_layout": f"000003/{MASK_LAYOUT_FILE}",
     }
     roots = reconstruct_native(dataset, tmp_path / "rebuilt", shared_builders=BUILDERS)
     for identity, native in natives.items():
@@ -273,7 +315,25 @@ def _context(tmp_path, frames):
 @pytest.mark.parametrize(
     ("mutate", "message"),
     [
+        (
+            lambda s: (s / "mask/000000_000000.png").rename(
+                s / "mask/000000_000042.png"
+            ),
+            "mask filenames must use ground-truth indices",
+        ),
         (lambda s: (s.parent / "notes.txt").write_text("x"), "outside any frame"),
+        (
+            lambda s: (s / MASK_LAYOUT_FILE).unlink(),
+            "mask_layout.json is missing",
+        ),
+        (
+            lambda s: (s / MASK_LAYOUT_FILE).write_text('{"mask_suffix": "obj_id"}'),
+            "expected {'mask_suffix': 'gt_index'}",
+        ),
+        (
+            lambda s: (s / MASK_LAYOUT_FILE).write_text("{not json"),
+            "mask_layout.json is not valid UTF-8 JSON",
+        ),
         (lambda s: (s.parent / "000004").mkdir(), "Missing 000005/scene_camera"),
         (lambda s: (s / "depth/000000.png").unlink(), "Missing 000003/depth"),
         (
@@ -373,6 +433,34 @@ def test_collect_rejects_inconsistent_native_output(
         BOPFrameAdapter().collect_samples(root, writer, _context(tmp_path, [0]))
 
 
+def test_unmarked_model_id_masks_are_rejected_not_swapped(tmp_path, frame_values):
+    # A 0.2 scene named masks by model ID. With obj_ids [1, 0], both suffixes
+    # are also valid GT indices, so only the missing marker reveals the layout.
+    root = _natives(tmp_path, {"a": [0]}, frame_values, **CONFIG)["a"]
+    scene = root / "000003"
+    (scene / MASK_LAYOUT_FILE).unlink()
+    gt = _scene(root, "scene_gt")
+    gt["0"][0]["obj_id"], gt["0"][1]["obj_id"] = 1, 0
+    (scene / "scene_gt.json").write_text(json.dumps(gt, indent=2))
+    writer = BOPWriter(BOPWriterConfig(**CONFIG))
+    with pytest.raises(PackagingError, match="mask_layout.json is missing"):
+        BOPFrameAdapter().collect_samples(root, writer, _context(tmp_path, [0]))
+
+
+def test_unmarked_scene_without_masks_still_exports(tmp_path, frame_values):
+    root = _natives(tmp_path, {"a": [0]}, frame_values, **CONFIG)["a"]
+    scene = root / "000003"
+    for directory in ("mask", "mask_visib"):
+        shutil.rmtree(scene / directory)
+    (scene / MASK_LAYOUT_FILE).unlink()
+    writer = BOPWriter(BOPWriterConfig(**CONFIG))
+    context = _context(tmp_path, [0])
+    [sample] = BOPFrameAdapter().collect_samples(root, writer, context)
+    assert "mask_layout" not in context.shared_paths
+    record = json.loads(sample.files["json"].read_text())
+    assert all(m["mask"] is None and m["mask_visib"] is None for m in record["masks"])
+
+
 def test_writer_configuration_must_match_native_output(tmp_path, frame_values):
     root = _natives(tmp_path, {"a": [0, 1]}, frame_values, **CONFIG)["a"]
     adapter = BOPFrameAdapter()
@@ -396,7 +484,7 @@ def test_failed_episode_keeps_dataset_object_ids(tmp_path, frame_values):
             episode.write_frame(0, frame_values(0))
         values = frame_values(1)
         values["SemanticBoundingBox3D"] = values["SemanticBoundingBox3D"].copy()
-        values["SemanticBoundingBox3D"]["transform"][0, 0, 3] = np.nan
+        values["SemanticBoundingBox3D"]["transform"][0, 3, 0] = np.nan
         with pytest.raises(PackagingError, match="non-finite"):
             with capture.episode("b") as episode:
                 episode.write_frame(1, values)

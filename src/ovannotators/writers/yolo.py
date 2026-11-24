@@ -110,6 +110,7 @@ class YOLOWriter:
             c: i for i, c in enumerate(self._class_list)
         }
         self._finalized: bool = False
+        self._finalization_payload: bytes | None = None
 
     # -----------------------------------------------------------------------
     # Public API
@@ -132,7 +133,10 @@ class YOLOWriter:
 
         Raises:
             MissingRenderVarError: If a required render var is missing.
+            ValueError: If finalization has started.
         """
+        if self._finalization_payload is not None:
+            raise ValueError("cannot write frames after finalization has started")
         validate_required_vars(
             self.name, self.required_render_vars, render_vars, frame_id
         )
@@ -190,13 +194,17 @@ class YOLOWriter:
     def finalize(self, backend: Backend) -> None:
         """Write the dataset ``data.yaml`` (class names and split paths).
 
+        Retry with the same writer and backend after a storage failure.
+
         Args:
             backend (Backend): Destination backend for ``data.yaml``.
         """
         if self._finalized:
             return
+        if self._finalization_payload is None:
+            self._finalization_payload = _build_data_yaml(self._class_list).encode()
+        backend.write("data.yaml", self._finalization_payload)
         self._finalized = True
-        backend.write("data.yaml", _build_data_yaml(self._class_list).encode())
 
     # -----------------------------------------------------------------------
     # Private helpers

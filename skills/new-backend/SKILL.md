@@ -10,15 +10,13 @@ description: >
   e.g. "add a GCS backend", "write datasets to Azure", "implement a backend for
   X store".
 license: Apache-2.0
-version: "0.1.0"
-author: NVIDIA ovannotators
-tags:
-  - ovannotators
-  - backends
-  - storage
-tools:
-  - Read
-  - Grep
+metadata:
+  author: NVIDIA ovannotators
+  version: "0.1.0"
+  tags:
+    - ovannotators
+    - backends
+    - storage
 ---
 
 # Creating a New Backend
@@ -42,15 +40,12 @@ coding:
 - **Prompt** — use the description directly; ask only if auth or the
   put/get/list surface is ambiguous.
 
-Also gather, in this order (repository files and the snippets below first, then
-the user request, then broader context):
+Also gather:
 
 - The client library/SDK and its auth (credentials, env vars, tokens).
 - How the store maps the six `Backend` methods (see Key Types / Functions),
   especially whether it has real directories or is a flat key space.
 - Optional dependency: which extra package the backend needs.
-
-Treat the referenced `> **Source:**` snippets as the API source of truth.
 
 ## Prerequisites
 
@@ -84,8 +79,7 @@ Treat the referenced `> **Source:**` snippets as the API source of truth.
 5. Register it: add the class to `_register_builtins()` in
    `src/ovannotators/backends/_registry.py` (or use `@BackendRegistry.register`),
    export it + its config from `src/ovannotators/backends/__init__.py` and the
-   top-level `src/ovannotators/__init__.py` `__all__`, and add an entry-point
-   line (see Output Format).
+   top-level `src/ovannotators/__init__.py` `__all__`.
 6. If the backend needs a new dependency, add an extra under
    `[project.optional-dependencies]` in `pyproject.toml` and fold it into the
    `all-*` extras.
@@ -121,25 +115,12 @@ payload in one file and dispatch through `BackendRegistry`:
 
 > **Source:** `tests/docs/python/test_config_serialization.py` snippet `doc-config-registry`
 
-## Output Format
+## Registration
 
-- For explanations: cite the relevant API names, the source snippet(s), and the
-  config/auth model.
-- For code changes: summarize the module added, the registration + exports +
-  optional-dependency wired, the docs section, and the test run.
-
-Entry-point registration (small inline fragment) makes the backend
-auto-register on install:
-
-```toml
-# pyproject.toml
-[project.entry-points."ovannotators.backends"]
-my_store = "ovannotators.backends.my_store:MyStoreBackend"
-```
-
-## Scripts
-
-This skill has no scripts.
+`BackendRegistry` does not load entry points. A backend is available by name
+only after `_register_builtins()` adds it, its module is imported so
+`@BackendRegistry.register` runs, or a caller runs
+`BackendRegistry.register(MyBackend)` directly.
 
 ## Key Types / Functions
 
@@ -163,12 +144,11 @@ Backend protocol methods to implement:
 
 ## Limitations
 
-- The referenced snippets remain the source of truth; add or update a tested
-  snippet before documenting new API usage.
+- Add or update a tested snippet before documenting new API usage.
 - Snippet tests are CPU-only and mock external SDKs; live network/store calls
   are out of scope for this suite.
 
-## Troubleshooting
+## Rules
 
 - Keep all paths relative to the configured root/prefix; join the prefix
   internally, never leak absolute keys to callers.
@@ -178,13 +158,9 @@ Backend protocol methods to implement:
 - Wrap SDK/HTTP errors in `BackendWriteError` / `BackendReadError`; don't let
   raw client exceptions escape.
 - `write_array` may receive Warp arrays. For `npy`/`exr`, copy to host NumPy
-  before serializing (as `disk.py` does via `_to_numpy`). For `png`/`jpg`, do
-  **not** copy: hand the array straight to `get_image_codec().encode(array, ...)`.
-- Encode `png`/`jpg` only via `get_image_codec()` — never hardcode Pillow. It
-  auto-selects GPU nvImageCodec when the `[gpu]` extra and a CUDA device are
-  present (several× faster, and zero-copy for GPU-resident Warp arrays) and
-  falls back to Pillow otherwise. Passing the array through unchanged keeps the
-  on-device fast path; recommend users install `[gpu]` on GPU hosts.
+  before serializing (as `disk.py` does via `_to_numpy`). For `png`/`jpg`, pass
+  the array unchanged to `get_image_codec().encode(array, ...)`, never to
+  Pillow directly; the codec chooses the GPU or Pillow path.
 
 ## References
 
@@ -193,25 +169,13 @@ Backend protocol methods to implement:
   `ovstorage.py`)
 - Registry + built-in registration: `src/ovannotators/backends/_registry.py`
 - Companion skill for output formats: `skills/new-writer/SKILL.md`
-- Keep skills, snippets, and `docs/public/api.rst` synchronized when the API
-  changes.
 
 ## WebDataset packaging composition
 
-WebDatasetPackager wraps an ordinary storage backend and accepts explicitly
-complete samples and episodes. It is not a Backend or an entry in
-BackendRegistry: arbitrary file writes cannot identify
-sample boundaries or deferred annotations. Use DatasetCapture, which packages
-each writer's output through a CaptureAdapter: built-in adapters are selected
-by exact writer type, and `adapter=` selects others. Existing writer and
-backend contracts are unchanged.
-
-> **Source:** `tests/docs/python/test_webdataset.py` snippet `doc-webdataset-capture`
-
-For finalized native output on local disk, `export_finalized_dataset(writer,
-episodes, packager)` applies the same adapter to one directory per episode and
-leaves the sources unchanged. A custom writer needs a `CaptureAdapter` passed as
-`adapter=`; see `skills/new-writer/SKILL.md`.
+`WebDatasetPackager` wraps an ordinary backend; it is not itself a `Backend` or
+a `BackendRegistry` entry, so a new backend needs no WebDataset code. Capture
+through `DatasetCapture` and writer adapters is covered in
+`skills/new-writer/SKILL.md`.
 
 Use SampleFiles and pack_episode for existing encoded data, including custom
 multimodal/episode samples. No training-reader dependency is needed at runtime.

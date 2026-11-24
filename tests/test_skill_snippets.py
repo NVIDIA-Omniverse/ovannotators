@@ -20,13 +20,18 @@ Enforces the convention documented in ``skills/README.md``:
 * every ``> **Source:**`` reference in a ``SKILL.md`` resolves to a real
   ``# [snippet:name]`` / ``# [/snippet:name]`` marker pair in the referenced
   file, so skill code never goes stale silently;
-* each skill's frontmatter ``name`` matches its directory (Agent Skills spec);
+* each skill's frontmatter ``name`` matches its directory and its root holds
+  only Agent Skills spec fields;
 * the ``.agents/skills`` and ``.claude/skills`` mirrors are symlinks resolving
-  to the canonical ``skills/`` tree.
+  to the canonical ``skills/`` tree;
+* each ``evals/evals.json`` for the NVIDIA skill catalog names its skill, has
+  unique ids, includes both a loading case and a negative routing case, and
+  grades positive cases on the outcome rather than on reading the skill.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -71,6 +76,28 @@ def test_skill_name_matches_directory(skill_md: Path):
     assert match.group(1) == skill_md.parent.name
 
 
+# Root frontmatter keys in the Agent Skills spec; anything else goes under metadata.
+_SPEC_ROOT_KEYS = {
+    "name",
+    "description",
+    "license",
+    "compatibility",
+    "metadata",
+    "allowed-tools",
+}
+
+
+@pytest.mark.parametrize("skill_md", _skill_files(), ids=lambda p: p.parent.name)
+def test_skill_frontmatter_root_keys(skill_md: Path):
+    """Only spec fields sit at the frontmatter root; validators ignore the rest."""
+    text = skill_md.read_text(encoding="utf-8")
+    frontmatter = text.split("---\n", 2)[1]
+    keys = set(re.findall(r"^([A-Za-z][\w-]*):", frontmatter, re.MULTILINE))
+    assert keys <= _SPEC_ROOT_KEYS, (
+        f"move {sorted(keys - _SPEC_ROOT_KEYS)} under metadata"
+    )
+
+
 def test_source_references_resolve():
     """Every ``> **Source:**`` reference points at a real snippet marker."""
     references = list(_iter_source_references())
@@ -97,3 +124,32 @@ def test_skill_mirror_is_symlink_to_canonical(mirror: str):
     link = REPO_ROOT / mirror
     assert link.is_symlink(), f"{mirror} should be a symlink"
     assert link.resolve() == SKILLS_DIR.resolve(), f"{mirror} must resolve to skills/"
+
+
+def _eval_datasets() -> list[Path]:
+    return sorted(SKILLS_DIR.glob("*/evals/evals.json"))
+
+
+@pytest.mark.parametrize("dataset", _eval_datasets(), ids=lambda p: p.parents[1].name)
+def test_eval_dataset_shape(dataset: Path):
+    """Catalog eval datasets name their skill and carry positive and negative cases."""
+    skill = dataset.parents[1].name
+    data = json.loads(dataset.read_text(encoding="utf-8"))
+    assert data["skill_name"] == skill
+    ids = [case["id"] for case in data["evals"]]
+    assert len(ids) == len(set(ids)), f"duplicate eval ids in {dataset}"
+    for case in data["evals"]:
+        assert case["prompt"] and case["expected_output"] and case["assertions"]
+        assert case["expected_skill"] in (skill, None)
+        if case["expected_skill"]:
+            # The baseline arm has no skill, so outcome checks must not require it.
+            text = " ".join(
+                [case["prompt"], case["expected_output"], *case["assertions"]]
+            )
+            assert "SKILL.md" not in text, (
+                f"{case['id']} grades skill use, not the outcome"
+            )
+    expected = [case["expected_skill"] for case in data["evals"]]
+    assert skill in expected, "needs at least one case that loads the skill"
+    assert None in expected, "needs at least one negative routing case"
+    assert (dataset.parents[1] / "skill-card.md").is_file()

@@ -51,7 +51,7 @@ except ImportError:
 
 pytestmark = [pytest.mark.e2e, pytest.mark.gpu]
 
-# Raw ovrtx bbox/camera payloads are byte buffers; writers consume the
+# Raw ovrtx bbox/camera outputs are named tensors; writers consume the
 # structured arrays these decoders produce (mirrors tests/conftest.py).
 try:
     from ovannotators.writers._helpers import (
@@ -127,8 +127,21 @@ def _render_frame(renderer):
     for name, rv in render_vars_by_source_name(frame).items():
         try:
             with rv.map(device=_ovrtx.Device.CPU) as mapped:
-                arr = np.from_dlpack(mapped).copy()
-            render_vars[name] = arr
+                if len(mapped) == 1 and not mapped.params:
+                    value = np.from_dlpack(mapped).copy()
+                else:
+                    # ovrtx 0.7 annotators: named tensors and params, in the
+                    # layout OvrtxOutput.extract returns and the decoders read.
+                    value = {
+                        "tensors": {
+                            k: np.from_dlpack(mapped[k]).copy() for k in mapped.keys()
+                        },
+                        "params": {
+                            k: np.from_dlpack(v).copy()
+                            for k, v in mapped.params.items()
+                        },
+                    }
+            render_vars[name] = value
         except Exception:
             pass  # Skip vars that can't be mapped
 

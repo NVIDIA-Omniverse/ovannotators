@@ -77,9 +77,9 @@ def test_scene_metadata_matches_the_bundled_scene():
 @pytest.mark.unit
 @pytest.mark.cpu_only
 def test_profiles_needing_configuration_are_rejected(capsys):
-    with pytest.raises(SystemExit, match="needs configuration: output_base_uri"):
-        EXAMPLE["resolve_requirements"]("cosmos_multiview", None)
-    assert "cosmos_multiview profiles: default" in capsys.readouterr().out
+    with pytest.raises(SystemExit, match="needs configuration: camera_stream_ids"):
+        EXAMPLE["resolve_requirements"]("lerobot_v3", None)
+    assert "lerobot_v3 profiles: default" in capsys.readouterr().out
 
 
 @pytest.mark.gpu
@@ -142,7 +142,7 @@ def test_renderer_and_stage_are_torn_down_when_capture_fails(
         def destroy(self):
             events.append("destroy-renderer")
 
-    def open_usd_from_string(*args, **kwargs):
+    def failing_capture(*args, **kwargs):
         raise RuntimeError("injected capture failure")
 
     ovrtx = types.ModuleType("ovrtx")
@@ -151,10 +151,12 @@ def test_renderer_and_stage_are_torn_down_when_capture_fails(
     ovstage = types.ModuleType("ovstage")
     ovstage.Stage = FakeStage
     ovstage.population = types.SimpleNamespace(
-        open_usd_from_string=open_usd_from_string
+        open_usd_from_string=lambda *args, **kwargs: None
     )
     monkeypatch.setitem(sys.modules, "ovrtx", ovrtx)
     monkeypatch.setitem(sys.modules, "ovstage", ovstage)
+    if failure == "capture":
+        monkeypatch.setitem(EXAMPLE["main"].__globals__, "capture", failing_capture)
 
     with pytest.raises(RuntimeError, match=f"injected {failure} failure"):
         EXAMPLE["main"](["--out", str(tmp_path)])

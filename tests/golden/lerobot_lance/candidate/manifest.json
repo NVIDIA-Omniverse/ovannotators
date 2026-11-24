@@ -1,0 +1,8 @@
+{
+  "frames": 9,
+  "profile": "lerobot_lance",
+  "status": "candidate_pending_human_approval",
+  "tables": ["frames", "meta", "videos"],
+  "video_blobs": 6,
+  "video_keys": ["observation.images.front", "observation.images.wrist"]
+}

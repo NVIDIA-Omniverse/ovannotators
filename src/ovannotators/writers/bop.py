@@ -31,7 +31,10 @@ from ovannotators.writers._helpers import (
     instance_masks,
     iter_bboxes_2d,
     iter_bboxes_3d,
+    pose_in_opencv_camera,
+    rotation_and_scale,
     validate_required_vars,
+    world_to_opencv_camera,
 )
 from ovannotators.writers._registry import WriterRegistry
 
@@ -69,6 +72,12 @@ class BOPWriterConfig:
 # Writer
 # ---------------------------------------------------------------------------
 
+MASK_LAYOUT_FILE = "mask_layout.json"
+"""Scene file that records how mask filename suffixes are assigned."""
+
+MASK_LAYOUT: dict[str, str] = {"mask_suffix": "gt_index"}
+"""Content of :data:`MASK_LAYOUT_FILE`: suffixes are ``scene_gt`` list indices."""
+
 _REQUIRED_VARS: frozenset[str] = frozenset(
     {
         "LdrColor",
@@ -90,20 +99,24 @@ class BOPWriter:
         {output_dir}/{scene_id:06d}/
         ├── rgb/              {frame_id:06d}.png
         ├── depth/            {frame_id:06d}.png  (16-bit, depth_scale mm/unit)
-        ├── mask/             {frame_id:06d}_{obj_id:06d}.png
-        ├── mask_visib/       {frame_id:06d}_{obj_id:06d}.png
+        ├── mask/             {frame_id:06d}_{gt_index:06d}.png
+        ├── mask_visib/       {frame_id:06d}_{gt_index:06d}.png
         ├── scene_camera.json
         ├── scene_gt.json
-        └── scene_gt_info.json
+        ├── scene_gt_info.json
+        └── mask_layout.json  {"mask_suffix": "gt_index"}
 
     ``scene_camera.json``, ``scene_gt.json``, and ``scene_gt_info.json`` are
-    accumulated in memory and written during :meth:`finalize`.
+    accumulated in memory and written during :meth:`finalize`, followed by
+    ``mask_layout.json``. Its presence distinguishes ground-truth-index mask
+    suffixes from the model-ID suffixes that ovannotators 0.2 wrote.
 
     The ``SemanticBoundingBox3D`` render var provides object poses:
 
-    * ``cam_R_m2c`` = the rotation matrix from the 3-D bbox ``rotation`` field
-      (model-to-camera).
-    * ``cam_t_m2c`` = ``center * 1000`` (model centre in camera frame, mm).
+    * ``cam_R_m2c`` = the 3-D bbox ``rotation`` expressed in the OpenCV camera
+      frame (+Z forward, +Y down), model-to-camera.
+    * ``cam_t_m2c`` = the 3-D bbox centre in the OpenCV camera frame, in mm.
+      The bbox centre stands in for the model origin.
     """
 
     name: ClassVar[str] = "bop"
@@ -121,6 +134,8 @@ class BOPWriter:
         self._scene_gt: dict[str, Any] = {}
         self._scene_gt_info: dict[str, Any] = {}
         self._finalized: bool = False
+        self._finalization_payloads: dict[str, bytes] | None = None
+        self._finalized_paths: set[str] = set()
 
     @property
     def _scene_dir(self) -> str:
@@ -143,10 +158,18 @@ class BOPWriter:
 
         Raises:
             MissingRenderVarError: If a required render var is missing.
+            ValueError: If finalization has started or the scene-unit scale is
+                not finite and positive.
         """
+        if self._finalization_payloads is not None:
+            raise ValueError("cannot write frames after finalization has started")
         validate_required_vars(
             self.name, self.required_render_vars, render_vars, frame_id
         )
+        raw_camera = _to_numpy(render_vars["CameraParams"]).reshape(-1)[0]
+        mm_per_scene_unit = float(raw_camera["meters_per_scene_unit"]) * 1000.0
+        if not np.isfinite(mm_per_scene_unit) or mm_per_scene_unit <= 0:
+            raise ValueError("meters_per_scene_unit must be finite and positive")
 
         sd = self._scene_dir
         stem = f"{frame_id:06d}"
@@ -170,8 +193,9 @@ class BOPWriter:
         # --- Camera params ---
         cam = extract_camera_params(render_vars["CameraParams"])
         K_flat = cam.K.ravel().tolist()
-        R_w2c = cam.R.ravel().tolist()
-        t_w2c = (cam.t * 1000.0).tolist()
+        r_w2c, t_w2c_scene = world_to_opencv_camera(cam)
+        R_w2c = r_w2c.ravel().tolist()
+        t_w2c = (t_w2c_scene * mm_per_scene_unit).tolist()
         self._scene_camera[str(frame_id)] = {
             "cam_K": K_flat,
             "cam_R_w2c": R_w2c,
@@ -198,16 +222,27 @@ class BOPWriter:
             iter_bboxes_3d(render_vars["SemanticBoundingBox3D"], id_to_label)
         )
         inst_masks = instance_masks(inst_seg, [b.instance_id for b in bboxes_3d])
-        for bb3 in bboxes_3d:
+        for gt_index, bb3 in enumerate(bboxes_3d):
             iid = bb3.instance_id
             label = bb3.label
             obj_id = self._resolve_obj_id(label, iid)
+
+            # BOP requires a rotation matrix; a scaled object's box transform
+            # carries the scale, so remove it before the pose reaches the file.
+            # A zero-length axis has no direction, so there is no rotation to
+            # write: refuse it before any file for this object is written.
+            unit_rotation, axis_scale = rotation_and_scale(bb3.rotation)
+            if not np.all(axis_scale > 0.0):
+                raise ValueError(
+                    f"BOPWriter: instance {iid} ({label!r}) has a zero-length "
+                    "box axis, so it has no rotation to write as cam_R_m2c"
+                )
 
             # Visible mask from instance segmentation
             mask_visib = inst_masks[iid] * 255
             mask_all = mask_visib  # synthetic: no occlusion model
 
-            obj_stem = f"{stem}_{obj_id:06d}"
+            obj_stem = f"{stem}_{gt_index:06d}"
             # Without an occlusion model both masks are the same image, so
             # encode it once and store the bytes under both paths.
             mask_png = get_image_codec().encode(mask_all, format="png")
@@ -216,8 +251,9 @@ class BOPWriter:
 
             # GT pose. BOP stores cam_t_m2c as a flat 3-vector [tx, ty, tz]
             # (mm); loaders reshape it to 3x1 themselves.
-            R_m2c = bb3.rotation.ravel().tolist()
-            t_m2c = (bb3.center * 1000.0).reshape(3).tolist()
+            rot_cam, center_cam = pose_in_opencv_camera(cam, unit_rotation, bb3.center)
+            R_m2c = rot_cam.ravel().tolist()
+            t_m2c = (center_cam * mm_per_scene_unit).reshape(3).tolist()
             gt_list.append({"cam_R_m2c": R_m2c, "cam_t_m2c": t_m2c, "obj_id": obj_id})
 
             # GT info (bounding boxes, pixel counts, visibility)
@@ -259,22 +295,31 @@ class BOPWriter:
         self._scene_gt_info[str(frame_id)] = gt_info_list
 
     def finalize(self, backend: Backend) -> None:
-        """Write the accumulated ``scene_gt`` and ``scene_gt_info`` JSON files.
+        """Persist scene JSON, retaining successful writes across retries.
 
         Args:
             backend (Backend): Destination backend for the output files.
         """
         if self._finalized:
             return
-        self._finalized = True
         sd = self._scene_dir
-
-        def _dump(obj: Any) -> bytes:
-            return json.dumps(obj, indent=2).encode()
-
-        backend.write(f"{sd}/scene_camera.json", _dump(self._scene_camera))
-        backend.write(f"{sd}/scene_gt.json", _dump(self._scene_gt))
-        backend.write(f"{sd}/scene_gt_info.json", _dump(self._scene_gt_info))
+        if self._finalization_payloads is None:
+            self._finalization_payloads = {
+                f"{sd}/{name}.json": json.dumps(value, indent=2).encode()
+                for name, value in (
+                    ("scene_camera", self._scene_camera),
+                    ("scene_gt", self._scene_gt),
+                    ("scene_gt_info", self._scene_gt_info),
+                )
+            }
+            self._finalization_payloads[f"{sd}/{MASK_LAYOUT_FILE}"] = json.dumps(
+                MASK_LAYOUT
+            ).encode()
+        for path, payload in self._finalization_payloads.items():
+            if path not in self._finalized_paths:
+                backend.write(path, payload)
+                self._finalized_paths.add(path)
+        self._finalized = True
 
     # -----------------------------------------------------------------------
     # Private helpers

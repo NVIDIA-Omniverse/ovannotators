@@ -17,6 +17,16 @@
 
 from __future__ import annotations
 
+import errno
+import ctypes
+import logging
+import os
+import stat
+import struct
+import subprocess
+import sys
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -58,6 +68,339 @@ class TestDiskBackend:
         backend.write("x.bin", b"first")
         backend.write("x.bin", b"second")
         assert backend.read("x.bin") == b"second"
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+    def test_overwrite_rewrites_the_existing_file_in_place(self, tmp_path):
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path, overwrite=True))
+        private = tmp_path / "private.bin"
+        private.write_bytes(b"old")
+        private.chmod(0o640)
+        before = private.stat()
+
+        backend.write("private.bin", b"new")
+
+        after = private.stat()
+        assert private.read_bytes() == b"new"
+        assert os.path.samestat(before, after)
+        assert stat.S_IMODE(after.st_mode) == 0o640
+        assert (after.st_uid, after.st_gid) == (before.st_uid, before.st_gid)
+        assert list(tmp_path.iterdir()) == [private]
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX write authorization")
+    def test_overwrite_requires_destination_write_access(self, tmp_path):
+        if os.geteuid() == 0:
+            pytest.skip("root can open read-only files for writing")
+        dest = tmp_path / "existing"
+        dest.write_bytes(b"before")
+        dest.chmod(0o444)
+        with pytest.raises(PermissionError):
+            os.close(os.open(dest, os.O_WRONLY))
+        backend = DiskBackend(DiskBackendConfig(tmp_path, overwrite=True))
+        with pytest.raises(BackendWriteError):
+            backend.write("existing", b"after")
+        assert dest.read_bytes() == b"before"
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="macOS extended ACLs")
+    def test_overwrite_preserves_macos_deny_read_acl(self, tmp_path):
+        import pwd
+
+        if os.geteuid() == 0:
+            pytest.skip("requires an unprivileged file owner")
+        dest = tmp_path / "existing"
+        dest.write_bytes(b"before")
+        user = pwd.getpwuid(os.geteuid()).pw_name
+        subprocess.run(["chmod", "+a", f"{user} deny read", str(dest)], check=True)
+        backend = DiskBackend(DiskBackendConfig(tmp_path, overwrite=True))
+        backend.write("existing", b"after")
+        with pytest.raises(PermissionError):
+            dest.read_bytes()
+        subprocess.run(["chmod", "-a#", "0", str(dest)], check=True)
+        assert dest.read_bytes() == b"after"
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="Windows NTFS DACLs")
+    def test_overwrite_preserves_a_windows_deny_read_dacl(self, tmp_path):
+        dest = tmp_path / "existing"
+        dest.write_bytes(b"before")
+        subprocess.run(
+            ["icacls", str(dest), "/deny", "*S-1-1-0:(RD)"],
+            check=True,
+            capture_output=True,
+        )
+        with pytest.raises(PermissionError):
+            dest.read_bytes()
+        backend = DiskBackend(DiskBackendConfig(tmp_path, overwrite=True))
+        backend.write("existing", b"after")
+        with pytest.raises(PermissionError):
+            dest.read_bytes()
+        subprocess.run(
+            ["icacls", str(dest), "/remove:d", "*S-1-1-0"],
+            check=True,
+            capture_output=True,
+        )
+        assert dest.read_bytes() == b"after"
+
+    def test_windows_staging_directory_uses_private_inherited_access(
+        self, tmp_path, monkeypatch
+    ):
+        from ovannotators._internal import filesystem
+
+        def convert(sddl, revision, result, size):
+            assert sddl == "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)"
+            result._obj.value = 1234
+            return 1
+
+        def create(path, attributes):
+            assert path == str(tmp_path / "staging")
+            assert attributes._obj.descriptor == 1234
+            assert not attributes._obj.inherit_handle
+            return 0
+
+        kernel = SimpleNamespace(
+            CreateDirectoryW=MagicMock(side_effect=create), LocalFree=MagicMock()
+        )
+        security = SimpleNamespace(
+            ConvertStringSecurityDescriptorToSecurityDescriptorW=MagicMock(
+                side_effect=convert
+            )
+        )
+        libraries = {"kernel32": kernel, "advapi32": security}
+        monkeypatch.setattr(filesystem, "os", SimpleNamespace(name="nt"))
+        monkeypatch.setattr(
+            ctypes, "WinDLL", lambda name, **kwargs: libraries[name], raising=False
+        )
+        monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
+        monkeypatch.setattr(ctypes, "WinError", PermissionError, raising=False)
+        with pytest.raises(PermissionError):
+            filesystem.make_private_directory(tmp_path / "staging")
+        assert kernel.LocalFree.call_args.args[0].value == 1234
+
+    @pytest.mark.skipif(
+        sys.platform != "linux", reason="Linux POSIX ACL representation"
+    )
+    @pytest.mark.parametrize("named_reader", [None, 12346])
+    def test_overwrite_keeps_the_linux_access_acl(self, tmp_path, named_reader):
+        def access_acl(uid):
+            # Linux posix_acl_xattr_header v2 followed by tag, permissions, ID.
+            undefined = 0xFFFFFFFF
+            entries = [
+                (1, 6, undefined),
+                (2, 4, uid),
+                (4, 0, undefined),
+                (16, 4, undefined),
+                (32, 0, undefined),
+            ]
+            return struct.pack("<I", 2) + b"".join(
+                struct.pack("<HHI", *entry) for entry in entries
+            )
+
+        dest = tmp_path / "private.bin"
+        dest.write_bytes(b"original")
+        dest.chmod(0o640)
+        try:
+            os.setxattr(tmp_path, "system.posix_acl_default", access_acl(12345))
+        except OSError as exc:
+            if exc.errno in {errno.ENOTSUP, errno.EOPNOTSUPP}:
+                pytest.skip("filesystem does not support POSIX ACLs")
+            raise
+        name = "system.posix_acl_access"
+        if named_reader is not None:
+            os.setxattr(dest, name, access_acl(named_reader))
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path, overwrite=True))
+
+        backend.write("private.bin", b"new")
+
+        assert dest.read_bytes() == b"new"
+        assert stat.S_IMODE(dest.stat().st_mode) == 0o640
+        if named_reader is None:
+            assert name not in os.listxattr(dest)
+        else:
+            assert os.getxattr(dest, name) == access_acl(named_reader)
+
+    def test_create_if_absent_publishes_once_and_keeps_the_first_bytes(self, tmp_path):
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path, overwrite=True))
+
+        assert backend.write_if_absent("a/new.bin", b"data") is True
+        assert backend.write_if_absent("a/new.bin", b"again") is False
+
+        assert backend.read("a/new.bin") == b"data"
+        assert [p.name for p in (tmp_path / "a").iterdir()] == ["new.bin"]
+
+    def test_create_if_absent_falls_back_to_a_hard_link(self, tmp_path, monkeypatch):
+        from ovannotators.backends import disk
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", lambda *_: False)
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        assert backend.write_if_absent("a/new.bin", b"data") is True
+
+        assert backend.read("a/new.bin") == b"data"
+        assert [p.name for p in (tmp_path / "a").iterdir()] == ["new.bin"]
+
+    def test_create_if_absent_reports_a_link_failure_other_than_missing_support(
+        self, tmp_path, monkeypatch
+    ):
+        from ovannotators.backends import disk
+
+        def denied(*_args, **_kwargs):
+            raise PermissionError(errno.EACCES, "access denied")
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", lambda *_: False)
+        monkeypatch.setattr(disk.os, "link", denied)
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        with pytest.raises(BackendWriteError, match="access denied"):
+            backend.write_if_absent("x.bin", b"data")
+
+        assert list(tmp_path.iterdir()) == []
+
+    def test_create_if_absent_keeps_a_concurrent_writers_file(
+        self, tmp_path, monkeypatch
+    ):
+        from ovannotators.backends import disk
+
+        def lose_the_race(_source, destination):
+            Path(destination).write_bytes(b"other writer")
+            raise FileExistsError(errno.EEXIST, "exists", str(destination))
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", lambda *_: False)
+        monkeypatch.setattr(disk.os, "link", lose_the_race)
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        assert backend.write_if_absent("x.bin", b"mine") is False
+
+        assert (tmp_path / "x.bin").read_bytes() == b"other writer"
+        assert [p.name for p in tmp_path.iterdir()] == ["x.bin"]
+
+    def test_failed_temporary_cleanup_does_not_fail_a_committed_write(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        from ovannotators.backends import disk
+
+        real_unlink = Path.unlink
+
+        def busy_temporary(self, *args, **kwargs):
+            if self.name.endswith(".tmp"):
+                raise PermissionError(errno.EACCES, "busy")
+            return real_unlink(self, *args, **kwargs)
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", lambda *_: False)
+        monkeypatch.setattr(Path, "unlink", busy_temporary)
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        with caplog.at_level(logging.WARNING, logger="ovannotators.backends.disk"):
+            assert backend.write_if_absent("x.bin", b"committed") is True
+
+        assert (tmp_path / "x.bin").read_bytes() == b"committed"
+        assert "Could not remove temporary file" in caplog.text
+        leftovers = [p.name for p in tmp_path.iterdir() if p.name != "x.bin"]
+        assert len(leftovers) == 1 and leftovers[0].startswith(".ovannotators-")
+        assert backend.list() == ["x.bin"]
+
+    def test_failed_create_if_absent_leaves_nothing_and_can_be_retried(
+        self, tmp_path, monkeypatch
+    ):
+        from ovannotators.backends import disk
+
+        real_publish = disk._publish_without_overwrite
+
+        def disk_full(*_args):
+            raise OSError(errno.ENOSPC, "no space left on device")
+
+        monkeypatch.setattr(disk, "_publish_without_overwrite", disk_full)
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+        with pytest.raises(BackendWriteError, match="no space"):
+            backend.write_if_absent("x.bin", b"data")
+        assert list(tmp_path.iterdir()) == []
+
+        monkeypatch.setattr(disk, "_publish_without_overwrite", real_publish)
+        assert backend.write_if_absent("x.bin", b"data") is True
+        assert (tmp_path / "x.bin").read_bytes() == b"data"
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX setgid directories")
+    def test_create_if_absent_inherits_a_setgid_directory_group(self, tmp_path):
+        other = [gid for gid in os.getgroups() if gid != os.getegid()]
+        if not other:
+            pytest.skip("requires a supplementary group")
+        shared = tmp_path / "shared"
+        shared.mkdir()
+        try:
+            os.chown(shared, -1, other[0])
+            shared.chmod(0o2775)
+        except PermissionError:
+            pytest.skip("cannot assign the supplementary group")
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        assert backend.write_if_absent("shared/frame.bin", b"data") is True
+
+        assert (shared / "frame.bin").stat().st_gid == other[0]
+
+    @pytest.mark.skipif(
+        sys.platform != "linux", reason="Linux POSIX ACL representation"
+    )
+    def test_create_if_absent_inherits_the_directory_default_acl(self, tmp_path):
+        undefined = 0xFFFFFFFF
+        entries = [
+            (1, 6, undefined),
+            (2, 4, 12345),
+            (4, 4, undefined),
+            (16, 4, undefined),
+            (32, 4, undefined),
+        ]
+        default_acl = struct.pack("<I", 2) + b"".join(
+            struct.pack("<HHI", *entry) for entry in entries
+        )
+        try:
+            os.setxattr(tmp_path, "system.posix_acl_default", default_acl)
+        except OSError as exc:
+            if exc.errno in {errno.ENOTSUP, errno.EOPNOTSUPP}:
+                pytest.skip("filesystem does not support POSIX ACLs")
+            raise
+        backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
+
+        assert backend.write_if_absent("frame.bin", b"data") is True
+
+        acl = os.getxattr(tmp_path / "frame.bin", "system.posix_acl_access")
+        inherited = [
+            struct.unpack_from("<HHI", acl, offset) for offset in range(4, len(acl), 8)
+        ]
+        assert any(tag == 2 and uid == 12345 for tag, _, uid in inherited)
+
+    @pytest.mark.parametrize("winning_bytes", [b"mine", b"other producer"])
+    def test_immutable_write_matches_a_competitor_without_replacing_it(
+        self, tmp_path, monkeypatch, winning_bytes
+    ):
+        from ovannotators.backends import disk
+        from ovannotators.profile_writers._artifacts import write_matching_or_new
+
+        real_rename = disk._rename_without_overwrite
+        backend = DiskBackend(DiskBackendConfig(tmp_path, overwrite=True))
+
+        def commit_competitor(staged, destination):
+            assert backend.list() == []
+            destination.write_bytes(winning_bytes)
+            return real_rename(staged, destination)
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", commit_competitor)
+        if winning_bytes == b"mine":
+            write_matching_or_new(backend, "frame", b"mine")
+        else:
+            with pytest.raises(ValueError, match="different bytes"):
+                write_matching_or_new(backend, "frame", b"mine")
+        assert backend.read("frame") == winning_bytes
+        assert backend.list() == ["frame"]
+
+    def test_immutable_write_requires_an_atomic_filesystem(self, tmp_path, monkeypatch):
+        from ovannotators.backends import disk
+
+        def unsupported(*args):
+            raise OSError(errno.ENOTSUP, "hard links unavailable")
+
+        monkeypatch.setattr(disk, "_rename_without_overwrite", lambda *_: False)
+        monkeypatch.setattr(disk.os, "link", unsupported)
+        backend = DiskBackend(DiskBackendConfig(tmp_path, overwrite=True))
+        with pytest.raises(BackendWriteError, match="atomic create-if-absent"):
+            backend.write_if_absent("_ovannotators/_SUCCESS", b"complete")
+        assert backend.list() == []
 
     def test_read_nonexistent_raises(self, tmp_path):
         backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path))
@@ -356,10 +699,8 @@ class TestDiskBackend:
 
     def test_write_oserror(self, tmp_path):
         backend = DiskBackend(DiskBackendConfig(root_dir=tmp_path, overwrite=True))
-        # Trigger OSError in the try block by using a path with invalid chars
-        # or by mocking
         with patch("pathlib.Path.write_bytes", side_effect=OSError("disk full")):
-            with pytest.raises(BackendWriteError):
+            with pytest.raises(BackendWriteError, match="disk full"):
                 backend.write("test.bin", b"data")
 
     def test_write_array_png_uses_shared_codec(self, tmp_path):
@@ -458,6 +799,54 @@ class TestS3Backend:
         mock_boto3.put_object.assert_called_once_with(
             Bucket="mybucket", Key="data/file.bin", Body=b"content"
         )
+
+    def test_immutable_write_uses_server_side_precondition(self, mock_boto3):
+        from ovannotators.backends.s3 import S3Backend, S3BackendConfig
+
+        botocore = pytest.importorskip("botocore.exceptions")
+        backend = S3Backend(S3BackendConfig(bucket="mybucket", prefix="data"))
+        assert backend.write_if_absent("file.bin", b"first") is True
+        mock_boto3.put_object.assert_called_once_with(
+            Bucket="mybucket", Key="data/file.bin", Body=b"first", IfNoneMatch="*"
+        )
+        mock_boto3.put_object.side_effect = botocore.ClientError(
+            {"ResponseMetadata": {"HTTPStatusCode": 412}}, "PutObject"
+        )
+        assert backend.write_if_absent("file.bin", b"second") is False
+
+    @pytest.mark.parametrize("conflict", [False, True])
+    def test_immutable_multipart_precondition_and_abort(
+        self, mock_boto3, monkeypatch, conflict
+    ):
+        from ovannotators.backends import s3
+
+        botocore = pytest.importorskip("botocore.exceptions")
+        monkeypatch.setattr(s3, "_MAX_SINGLE_PUT_BYTES", 4)
+        backend = s3.S3Backend(s3.S3BackendConfig(bucket="test"))
+        backend._transfer_config.multipart_chunksize = 4
+        mock_boto3.create_multipart_upload.return_value = {"UploadId": "upload"}
+        mock_boto3.upload_part.side_effect = [{"ETag": "first"}, {"ETag": "last"}]
+        if conflict:
+            mock_boto3.complete_multipart_upload.side_effect = botocore.ClientError(
+                {"ResponseMetadata": {"HTTPStatusCode": 412}}, "CompleteMultipartUpload"
+            )
+        assert backend.write_if_absent("clip.mp4", b"123456") is not conflict
+        assert [
+            call.kwargs["Body"] for call in mock_boto3.upload_part.call_args_list
+        ] == [b"1234", b"56"]
+        mock_boto3.complete_multipart_upload.assert_called_once_with(
+            Bucket="test",
+            Key="clip.mp4",
+            UploadId="upload",
+            IfNoneMatch="*",
+            MultipartUpload={
+                "Parts": [
+                    {"PartNumber": 1, "ETag": "first"},
+                    {"PartNumber": 2, "ETag": "last"},
+                ]
+            },
+        )
+        assert mock_boto3.abort_multipart_upload.call_count == int(conflict)
 
     def test_write_large_payload_uses_multipart_upload(self, mock_boto3):
         from ovannotators.backends.s3 import S3Backend, S3BackendConfig

@@ -53,7 +53,7 @@ GPU, and CUDA.
 .. code-block:: bash
 
    pip install ovannotators   # core: numpy, Pillow, openexr, warp-lang
-   pip install "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3" \
+   pip install "ovrtx>=0.5,<0.8" "ovstage>=0.2,<0.5" \
        --extra-index-url https://pypi.nvidia.com/  # renderer used in this example (GPU + CUDA)
 
 **Code:**
@@ -86,7 +86,7 @@ GPU, and CUDA.
    # Use the first animation sample rather than USD Default time.
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
    render_products = {"/Render/RenderProduct_001"}
@@ -166,7 +166,7 @@ the core installation and need no extras. Rendering requires ``ovrtx``,
    # Use the first animation sample rather than USD Default time.
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
    extractor = OvrtxOutput()
@@ -247,7 +247,7 @@ also requires ``ovrtx`` and ``ovstage``.
 .. code-block:: bash
 
    pip install "ovannotators[lerobot,video]"  # pyarrow + PyNvVideoCodec (NVENC, needs CUDA)
-   pip install "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3" \
+   pip install "ovrtx>=0.5,<0.8" "ovstage>=0.2,<0.5" \
        --extra-index-url https://pypi.nvidia.com/  # renderer used in this example
 
 .. code-block:: python
@@ -279,7 +279,7 @@ also requires ``ovrtx`` and ``ovstage``.
    # Use the first animation sample rather than USD Default time.
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
    extractor = OvrtxOutput()
@@ -360,7 +360,7 @@ requires ``ovrtx`` and ``ovstage``.
 
    pip install "ovannotators[video]"  # PyNvVideoCodec for NVENC (required)
    pip install "ovannotators[gpu]"    # optional: nvImageCodec for faster image I/O
-   pip install "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3" \
+   pip install "ovrtx>=0.5,<0.8" "ovstage>=0.2,<0.5" \
        --extra-index-url https://pypi.nvidia.com/  # renderer used in the capture example below
    # Warp (Canny kernels on CUDA or Warp's CPU device) ships in the core install.
 
@@ -430,7 +430,7 @@ new ordinals, advances the write floor, and returns the last ordinal it used.
 
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
    extractor = OvrtxOutput()
@@ -653,7 +653,7 @@ it also requires ``ovrtx``, ``ovstage``, an NVIDIA GPU, and CUDA.
 
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
 
@@ -759,7 +759,7 @@ CUDA.
 
    ordinal = 1
    ovstage.population.open_usd(
-       stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
+       stage, "tests/data/test_scene.usda", ordinal, 0.0
    )
    stage.advance_write_floor(ordinal).wait()
    render_product = "/Render/RenderProduct_001"
@@ -1019,9 +1019,10 @@ Formats Not Packaged as WebDataset
 No built-in adapter exists for the profile writers below, and they are not
 packaged as WebDataset. Use their native output:
 
+- **LeRobot v3** (``LeRobotV3Writer``): records through the official LeRobot
+  dataset writer and produces a LeRobot v3.0 dataset. Consume it with LeRobot.
 - **Legacy LeRobot** (``LeRobotWriter``): writes the older ``v2.0`` layout
-  (``codebase_version``). A LeRobot v3.0 profile is coming soon; see
-  :doc:`writers/lerobot_v3`.
+  (``codebase_version``). Use ``LeRobotV3Writer`` for v3.0 output.
 - **Cosmos multiview** (``CosmosMultiviewWriter``): its ``samples.lance`` rows
   reference assets by absolute URIs under the configured ``output_base_uri``.
   Packaging files into tar shards does not change those URIs, so keep the

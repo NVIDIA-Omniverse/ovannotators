@@ -81,10 +81,11 @@ boundary.
 
 ## Build and Validate
 
-Prerequisite: install Python 3.11+ and `uv`. The default lane is CPU-only:
+Prerequisite: install Python 3.11+ and `uv`; the `docs` dependency group needs
+Python 3.12, the version in `.python-version`. The default lane is CPU-only:
 
 ```bash
-uv sync --extra dev-cpu
+uv sync --extra dev-cpu --group docs
 uv run pytest
 uv run pytest --cov
 uv run sphinx-build -W -b html docs/public _build/docs
@@ -96,8 +97,8 @@ public checkout's publication-validation commands.
 
 The default suite excludes `gpu`, `flaky`, and `experimental` tests. A change to
 renderer-facing code or a GPU dependency requires an NVIDIA GPU, CUDA, the real
-renderer packages, and the separate GPU procedure in
-[`skills/gpu-verification/SKILL.md`](skills/gpu-verification/SKILL.md).
+renderer packages, and a run of the GPU lane, `uv run pytest -m gpu`, against
+the real renderer.
 
 Tests passing is not runtime validation. For a renderer-facing workflow, run
 the [minimal capture](examples/README.md#minimal-renderer-capture), confirm its

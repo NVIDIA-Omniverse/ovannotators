@@ -17,14 +17,89 @@
 
 from __future__ import annotations
 
+import errno
+import logging
+import os
+import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import ClassVar, Union
+from uuid import uuid4
 
 import numpy as np
 
 from ovannotators.backends._encoding import encode_array
 from ovannotators.exceptions import BackendReadError, BackendWriteError
+
+logger = logging.getLogger(__name__)
+
+
+# What filesystems without hard links (FAT, exFAT) report from ``os.link``;
+# the Windows codes are ERROR_INVALID_FUNCTION and ERROR_NOT_SUPPORTED.
+_NO_HARD_LINK_ERRNOS = frozenset(
+    {errno.EPERM, errno.ENOTSUP, errno.EOPNOTSUPP, errno.ENOSYS}
+)
+_NO_HARD_LINK_WINERRORS = frozenset({1, 50})
+# ``write_if_absent`` stages bytes beside the destination under this reserved
+# name, so the file inherits the directory's group and access controls.
+_TEMPORARY_NAME = re.compile(r"\.ovannotators-[0-9a-f]{32}\.tmp")
+
+
+def _rename_without_overwrite(temporary: Path, dest: Path) -> bool:
+    """Move a staged file atomically if the filesystem supports exclusive rename."""
+    if os.name == "nt":
+        # Windows rename already fails when the destination exists.
+        temporary.rename(dest)
+        return True
+    if sys.platform not in {"linux", "darwin"}:
+        return False
+
+    import ctypes
+
+    libc = ctypes.CDLL(None, use_errno=True)
+    source, target = os.fsencode(temporary), os.fsencode(dest)
+    if sys.platform == "linux" and hasattr(libc, "renameat2"):
+        # AT_FDCWD and RENAME_NOREPLACE from the Linux renameat2 ABI.
+        result = libc.renameat2(-100, source, -100, target, 1)
+    elif sys.platform == "darwin" and hasattr(libc, "renamex_np"):
+        # RENAME_EXCL from Darwin's stdio.h.
+        result = libc.renamex_np(source, target, 4)
+    else:
+        return False
+    if result == 0:
+        return True
+    error = ctypes.get_errno()
+    if error in {errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP}:
+        return False
+    raise OSError(error, os.strerror(error), str(dest))
+
+
+def _publish_without_overwrite(temporary: Path, dest: Path) -> None:
+    """Atomically publish a complete ``temporary`` at ``dest`` without replacing it.
+
+    Uses an exclusive rename where the platform has one, otherwise a hard link.
+    Both make the complete file visible in one step and fail if ``dest``
+    exists.
+
+    Raises:
+        FileExistsError: If ``dest`` exists.
+        OSError: If publication fails, including ``ENOTSUP`` when the
+            filesystem supports neither exclusive rename nor hard links.
+    """
+    if _rename_without_overwrite(temporary, dest):
+        return
+    try:
+        os.link(temporary, dest)
+    except OSError as exc:
+        if (
+            exc.errno in _NO_HARD_LINK_ERRNOS
+            or getattr(exc, "winerror", None) in _NO_HARD_LINK_WINERRORS
+        ):
+            raise OSError(
+                errno.ENOTSUP, "filesystem lacks atomic create-if-absent", str(dest)
+            ) from exc
+        raise
 
 
 @dataclass
@@ -120,6 +195,52 @@ class DiskBackend:
         except OSError as exc:
             raise BackendWriteError(path=path, message=str(exc)) from exc
 
+    def write_if_absent(self, path: str, data: bytes) -> bool:
+        """Atomically create a complete file, returning false if it already exists.
+
+        The bytes are staged in a hidden ``.ovannotators-<id>.tmp`` file in the
+        destination directory and published with an exclusive rename or a hard
+        link, so the new file gets the directory's ordinary group and
+        access-control inheritance. ``list()`` omits these staged files.
+
+        Args:
+            path (str): Destination path inside root_dir; may be absolute.
+            data (bytes): Complete file contents.
+
+        Returns:
+            bool: ``True`` if this call created the file; ``False`` if the path
+            already existed. An existing file is never modified.
+
+        Raises:
+            BackendWriteError: If the path resolves outside root_dir, the write
+                fails, or the filesystem supports neither exclusive rename nor
+                hard links.
+        """
+        try:
+            dest = self._abs(path)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if os.path.lexists(dest):
+                return False
+            temporary = dest.with_name(f".ovannotators-{uuid4().hex}.tmp")
+            try:
+                with temporary.open("xb") as handle:
+                    handle.write(data)
+                try:
+                    _publish_without_overwrite(temporary, dest)
+                except FileExistsError:
+                    return False
+            finally:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError as exc:
+                    # The destination is already complete; only cleanup failed.
+                    logger.warning(
+                        "Could not remove temporary file %s: %s", temporary, exc
+                    )
+        except (OSError, ValueError) as exc:
+            raise BackendWriteError(path=path, message=str(exc)) from exc
+        return True
+
     def write_array(
         self,
         path: str,
@@ -186,7 +307,8 @@ class DiskBackend:
         Returns:
             list[str]: Sorted file paths relative to root_dir; empty if the
             prefix does not exist. Symlinks whose targets are outside root_dir,
-            and broken or looping symlinks, are omitted.
+            broken or looping symlinks, and the hidden temporary files that
+            ``write_if_absent`` stages are omitted.
 
         Raises:
             BackendReadError: If ``prefix`` resolves outside root_dir (including
@@ -200,6 +322,8 @@ class DiskBackend:
             return []
         results: list[str] = []
         for item in base.rglob("*"):
+            if _TEMPORARY_NAME.fullmatch(item.name):
+                continue
             try:
                 if not item.is_file():
                     continue

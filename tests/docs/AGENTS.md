@@ -37,6 +37,7 @@ tests/docs/
 ├── AGENTS.md                       # This file
 ├── CLAUDE.md                       # Redirects to AGENTS.md
 └── python/
+    ├── test_dataset_capture.py     # Snippets for skills/ovannotators-dataset-quickstart and ovannotators-dataset-capture
     ├── test_custom_writer.py       # Snippets for skills/new-writer
     ├── test_custom_backend.py      # Snippets for skills/new-backend
     └── test_config_serialization.py  # Config save/load snippets (both skills)
@@ -103,6 +104,9 @@ remove a snippet, update this table in the same change.
 
 | Snippet | Source file | Used in skill |
 |---------|-------------|---------------|
+| `doc-capture-discover` | `python/test_dataset_capture.py` | `ovannotators-dataset-capture` |
+| `doc-quickstart-coco-cpu` | `python/test_dataset_capture.py` | `ovannotators-dataset-quickstart`, `ovannotators-dataset-capture` |
+| `doc-quickstart-verify-coco` | `python/test_dataset_capture.py` | `ovannotators-dataset-quickstart`, `ovannotators-dataset-capture` |
 | `doc-writer-config` | `python/test_custom_writer.py` | `new-writer` |
 | `doc-writer-class` | `python/test_custom_writer.py` | `new-writer` |
 | `doc-writer-register` | `python/test_custom_writer.py` | `new-writer` |
@@ -116,13 +120,13 @@ remove a snippet, update this table in the same change.
 | `doc-lossless-video` | `python/test_lossless_video.py` | Video tutorial |
 | `doc-profile-writer-class` | `python/test_profile_writer.py` | `new-writer` |
 | `doc-profile-writer-lifecycle` | `python/test_profile_writer.py` | `new-writer` |
-| `doc-webdataset-capture` | `python/test_webdataset.py` | `new-backend`, `new-writer` |
+| `doc-webdataset-capture` | `python/test_webdataset.py` | `new-backend`, `new-writer`, `ovannotators-dataset-capture` |
 | `doc-webdataset-pack-files` | `python/test_webdataset.py` | `new-backend` |
 | `doc-webdataset-custom-adapter` | `python/test_webdataset.py` | `new-writer` |
 | `doc-webdataset-clip-adapter` | `python/test_webdataset.py` | `new-writer`, API reference, public tutorial |
 | `doc-webdataset-export-finalized` | `python/test_webdataset.py` | public tutorial |
 | `doc-webdataset-read` | `python/test_webdataset.py` | public tutorial |
-| `doc-dataset-requirements` | `python/test_requirements.py` | `new-writer` |
+| `doc-dataset-requirements` | `python/test_requirements.py` | `new-writer`, `ovannotators-dataset-capture` |
 | `doc-depth-requirements` | `python/test_requirements.py` | `new-writer` |
 | `doc-webdataset-basic-video` | `python/test_webdataset.py` | API reference, public tutorial |
 

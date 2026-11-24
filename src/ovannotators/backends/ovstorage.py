@@ -174,6 +174,18 @@ class OvstorageBackend:
         except Exception as exc:
             raise BackendWriteError(path=path, message=str(exc)) from exc
 
+    def write_if_absent(self, path: str, data: bytes) -> bool:
+        """Atomically create an object through a fail-if-exists route."""
+        try:
+            self._await(
+                self._stack.write(self._address(path), data, if_dest_exists="fail")
+            )
+        except (ovstorage.AlreadyExistsError, ovstorage.PreconditionFailedError):
+            return False
+        except Exception as exc:
+            raise BackendWriteError(path=path, message=str(exc)) from exc
+        return True
+
     def write_array(
         self,
         path: str,

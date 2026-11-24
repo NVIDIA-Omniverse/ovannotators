@@ -1,0 +1,9 @@
+# LeRobot v3 canonical-loader conformance environment (Python 3.12+ only).
+# Installed only in isolated conformance virtualenvs — NOT a runtime dependency
+# of ovannotators (LeRobotV3Writer writes the v3.0 layout natively).
+# Source tag v0.7.0 resolves to 410c095eacc0011d998a73383eb94abed2715af0.
+lerobot[dataset]==0.7.0
+# Security floors: datasets 5.2 accepts the fixed fsspec and no longer pulls
+# aiohttp through fsspec[http].
+datasets>=5.2
+fsspec>=2026.6

@@ -20,31 +20,41 @@ from fractions import Fraction
 from numbers import Real
 from typing import Literal
 
-VideoCodec = Literal["h264", "hevc"]
+VideoCodec = Literal["h264", "hevc", "av1"]
 VideoPreset = Literal["P1", "P2", "P3", "P4", "P5", "P6", "P7"]
 
 
 def validate_video_options(
-    codec: VideoCodec, lossless: bool, preset: VideoPreset | None
+    codec: VideoCodec,
+    lossless: bool,
+    preset: VideoPreset | None,
+    *,
+    gop: int | None = None,
 ) -> None:
     """Validate codec options without importing GPU dependencies.
 
     Args:
-        codec: H.264 or HEVC.
+        codec: H.264, HEVC, or AV1.
         lossless: Preserve normalized RGB pixels exactly (HEVC only).
         preset: NVENC preset, or None to retain the codec's default.
+        gop: Optional keyframe interval (positive integer), or None for encoder
+            default.
 
     Raises:
         ValueError: If any option or combination is unsupported.
     """
-    if codec not in ("h264", "hevc"):
-        raise ValueError("video_codec must be 'h264' or 'hevc'")
+    if codec not in ("h264", "hevc", "av1"):
+        raise ValueError("video_codec must be 'h264', 'hevc', or 'av1'")
     if not isinstance(lossless, bool):
         raise ValueError("video_lossless must be a bool")
     if lossless and codec != "hevc":
         raise ValueError("video_lossless requires video_codec='hevc'")
     if preset is not None and preset not in ("P1", "P2", "P3", "P4", "P5", "P6", "P7"):
         raise ValueError("video_preset must be None or 'P1' through 'P7'")
+    if gop is not None and (
+        isinstance(gop, bool) or not isinstance(gop, int) or gop <= 0
+    ):
+        raise ValueError("video_gop must be a positive integer or None")
 
 
 def video_frame_rate(fps: float, name: str = "Frame rate") -> Fraction:
@@ -62,7 +72,8 @@ def video_frame_rate(fps: float, name: str = "Frame rate") -> Fraction:
         Fraction: The frame rate as ``numerator / denominator``.
 
     Raises:
-        ValueError: If ``fps`` is not a positive, finite real number.
+        ValueError: If ``fps`` is not a positive, finite real number, or is so
+            small that it rounds to a zero rational rate.
     """
     if (
         isinstance(fps, bool)
@@ -74,4 +85,7 @@ def video_frame_rate(fps: float, name: str = "Frame rate") -> Fraction:
     ntsc = round(fps * 1.001)
     if ntsc and not float(fps).is_integer() and abs(fps - ntsc / 1.001) < 0.005:
         return Fraction(ntsc * 1000, 1001)
-    return Fraction(fps).limit_denominator(1001)
+    rate = Fraction(fps).limit_denominator(1001)
+    if rate <= 0:
+        raise ValueError(f"{name} {fps!r} is too small to represent as a frame rate")
+    return rate

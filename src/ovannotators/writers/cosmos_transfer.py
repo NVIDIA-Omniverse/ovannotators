@@ -99,7 +99,8 @@ class CosmosTransferWriterConfig:
     Attributes:
         fps: Frames per second for output videos; fractional rates such as
             29.97 are supported.
-        video_codec: ``"h264"`` (default) or ``"hevc"``.
+        video_codec: ``"h264"`` (default), ``"hevc"``, or ``"av1"`` (Ada
+            Lovelace or newer GPU).
         video_lossless: Preserve normalized RGB and conditioning visualization
             pixels with HEVC 4:4:4; requires even, fixed dimensions.
         video_preset: Optional NVENC P1 through P7; lossless defaults to P5.

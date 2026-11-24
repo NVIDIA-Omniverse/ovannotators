@@ -317,7 +317,24 @@ class CosmosMultiviewWriter:
             raise ValueError(f"required selected streams are absent: {unreported}")
         if absent and self.config.qa.missing_data_policy == "fail":
             raise ValueError(f"selected streams have missing data: {sorted(absent)}")
-        self._current_samples.append(sample)
+        self._current_samples.append(
+            dataclasses.replace(
+                sample,
+                observations={
+                    key: dataclasses.replace(
+                        tensor, data=np.array(tensor.data, copy=True)
+                    )
+                    for key, tensor in sample.observations.items()
+                },
+                policy_signals={
+                    key: dataclasses.replace(
+                        tensor, data=np.array(tensor.data, copy=True)
+                    )
+                    for key, tensor in sample.policy_signals.items()
+                },
+                missing_data=dict(sample.missing_data),
+            )
+        )
 
     def end_episode(self, backend: Backend) -> None:
         """Close the source episode without prematurely materializing it."""

@@ -39,7 +39,14 @@ from ovannotators.capture_adapters import (
     resolve_adapter,
     source_paths,
 )
-from ovannotators.exceptions import ConfigurationError, PackagingError
+from ovannotators.exceptions import (
+    BackendWriteError,
+    ConfigurationError,
+    PackagingError,
+)
+
+
+_WINDOWS_ERROR_INVALID_NAME = 123
 
 
 class _PackagingSession:
@@ -148,7 +155,12 @@ class _RecordingDisk(DiskBackend):
 
     def write(self, path: str, data: bytes) -> None:
         self.written.append(path.rsplit("/", 1)[-1])
-        super().write(path, data)
+        try:
+            super().write(path, data)
+        except BackendWriteError as exc:
+            if getattr(exc.__cause__, "winerror", None) == _WINDOWS_ERROR_INVALID_NAME:
+                raise PackagingError(f"Invalid capture output path: {path!r}") from exc
+            raise
 
 
 class DatasetCapture:

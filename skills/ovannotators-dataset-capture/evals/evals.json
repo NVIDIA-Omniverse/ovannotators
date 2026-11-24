@@ -1,0 +1,91 @@
+{
+  "skill_name": "ovannotators-dataset-capture",
+  "evals": [
+    {
+      "id": "ovannotators-dataset-capture-kitti-inputs",
+      "prompt": "Which ovrtx render vars does my RenderProduct need so ovannotators can write a KITTI dataset? Show how to find out and how to build the writer.",
+      "expected_skill": "ovannotators-dataset-capture",
+      "expected_output": "Uses list_profiles and describe_requirements rather than guessing. Reports that the KITTI default profile requires CameraParams, LdrColor, SemanticBoundingBox2DTight and SemanticBoundingBox3D, and recommends SemanticIdMap for readable labels. Builds the writer with WriterRegistry.create(\"kitti\", requirements.config) when config is set, and notes that annotations are empty unless scene prims carry USD semantic labels.",
+      "assertions": [
+        "Calls describe_requirements instead of listing render vars from memory.",
+        "Distinguishes required from recommended render vars.",
+        "Creates the writer from requirements.config."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-s3-from-ovrtx",
+      "prompt": "Each frame from my ovrtx render loop should be written as a COCO instance-segmentation dataset straight to an S3 bucket. Show the capture wiring.",
+      "expected_skill": "ovannotators-dataset-capture",
+      "expected_output": "Selects coco with the instance_segmentation profile through describe_requirements, extracts each frame with OvrtxOutput, and writes through S3Backend (installed with the s3 extra, configured with bucket and prefix), calling write_frame per frame and finalize at the end. Leaves stage population and rendering to ovstage and ovrtx.",
+      "assertions": [
+        "Uses OvrtxOutput to extract render vars from the ovrtx frame.",
+        "Installs the s3 extra and uses S3Backend.",
+        "Calls finalize after the last frame.",
+        "Does not add stage or renderer lifecycle code to ovannotators."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-own-arrays",
+      "prompt": "We render with our own engine and already have RGB images and 2D boxes as NumPy arrays. Use ovannotators to write them as a YOLO detection dataset. Use three synthetic stand-in frames to show it works.",
+      "expected_skill": "ovannotators-dataset-capture",
+      "expected_output": "Uses the CPU array path: builds a dict keyed by sourceName with LdrColor and SemanticBoundingBox2DTight in the ovrtx record layout (128-bit instance and semantic IDs, then pixel extents), checks the layouts in docs/public/render_outputs.rst, and writes with the yolo writer and a DiskBackend. Notes that category names need SemanticIdMap.",
+      "assertions": [
+        "Keys frame dicts by ovrtx sourceName.",
+        "Matches the SemanticBoundingBox2DTight structured dtype rather than passing plain box arrays.",
+        "Verifies the written dataset."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-webdataset",
+      "prompt": "Package two episodes of COCO output from ovannotators as WebDataset tar shards for a training job, and prove the shards are complete. Use a few synthetic stand-in frames per episode.",
+      "expected_skill": "ovannotators-dataset-capture",
+      "expected_output": "Either captures through DatasetCapture with WebDatasetPackager over a DiskBackend, one episode block per episode, or exports already written output with export_finalized_dataset. Verifies that manifest.json exists, checks each shard's SHA-256 against its manifest entry, and opens one sample from a shard.",
+      "assertions": [
+        "Produces WebDataset shards that hold both episodes.",
+        "Treats the manifest as written last.",
+        "Checks shard checksums against the manifest."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-lerobot-v3",
+      "prompt": "Write my robot episodes as a LeRobot v3 dataset with ovannotators. Each episode has one RGB camera stream, wrist_rgb, at 30 fps. State: stream observation.state, joints j0 to j6, joint positions in rad, shape (7,). Action: stream action, joints j0 to j6, joint position targets in rad, shape (7,). Show the writer setup and episode loop; you don't need to install the lerobot or video extras or run it.",
+      "expected_skill": "ovannotators-dataset-capture",
+      "expected_output": "Identifies lerobot_v3 as an episode writer from ProfileWriterRegistry, not WriterRegistry. Notes that lerobot_v3 needs the lerobot and video extras and an NVIDIA GPU for NVENC video encoding. Because describe_requirements reports required_options camera_stream_ids, state and action, fills them from the request: camera stream wrist_rgb, fps 30, and LeRobotV3FeatureSpec declarations with the given stream IDs, feature names j0 to j6, units, representations and shape (7,). Calls describe_requirements again before creating the writer with ProfileWriterRegistry.create, then uses begin_episode, write_sample and end_episode.",
+      "assertions": [
+        "Uses ProfileWriterRegistry, not WriterRegistry.",
+        "Declares state and action as LeRobotV3FeatureSpec values from the request and sets camera_stream_ids and fps before constructing the writer.",
+        "Uses the episode lifecycle instead of write_frame."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-negative-renderer-crash",
+      "prompt": "ovrtx segfaults when I attach it to my ovstage stage. How do I debug the renderer startup?",
+      "expected_skill": null,
+      "expected_output": "Treats this as an ovrtx or ovstage problem. Does not load ovannotators-dataset-capture or change writer code.",
+      "assertions": [
+        "Does not load ovannotators-dataset-capture/SKILL.md.",
+        "Does not modify ovannotators writers or backends."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-negative-randomization",
+      "prompt": "Randomize lighting, textures and object poses across frames in my USD scene for domain randomization.",
+      "expected_skill": null,
+      "expected_output": "Addresses scene randomization without loading ovannotators-dataset-capture.",
+      "assertions": [
+        "Does not load ovannotators-dataset-capture/SKILL.md.",
+        "Does not add randomization to ovannotators."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-capture-negative-new-backend",
+      "prompt": "Add an Azure Blob Storage backend to ovannotators so any writer can save its dataset there.",
+      "expected_skill": null,
+      "expected_output": "Treats this as backend development: a new storage backend registered with ovannotators. Does not run a dataset capture.",
+      "assertions": [
+        "Does not load ovannotators-dataset-capture/SKILL.md.",
+        "Does not run a dataset capture."
+      ]
+    }
+  ]
+}

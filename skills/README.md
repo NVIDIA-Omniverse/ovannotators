@@ -10,15 +10,14 @@ repository. Each skill is self-contained and follows the
 
 ## Complete Catalog
 
+Start with `ovannotators-dataset-quickstart` if you have not produced a dataset yet.
+
 | Skill | Use it for |
 | --- | --- |
-| [`gpu-verification`](gpu-verification/SKILL.md) | Run renderer, CUDA, NVENC, and GPU-gated validation that CPU CI cannot cover. |
+| [`ovannotators-dataset-quickstart`](ovannotators-dataset-quickstart/SKILL.md) | Produce and inspect a small labeled COCO dataset, on CPU by default. |
+| [`ovannotators-dataset-capture`](ovannotators-dataset-capture/SKILL.md) | Choose a writer, profile, frame source, and backend, then capture and verify a dataset. |
 | [`new-backend`](new-backend/SKILL.md) | Add, implement, or debug a storage backend and its registration. |
 | [`new-writer`](new-writer/SKILL.md) | Add, implement, or debug a dataset-format writer and its registration. |
-| [`test-classification`](test-classification/SKILL.md) | Choose pytest taxonomy markers and the correct CI or GPU lane. |
-| [`test-coverage`](test-coverage/SKILL.md) | Run coverage checks, interpret reports, and investigate changed-file gaps. |
-| [`test-creation`](test-creation/SKILL.md) | Create or update meaningful tests using repository conventions. |
-| [`test-triage`](test-triage/SKILL.md) | Diagnose test or CI failures and choose the appropriate response. |
 
 `skills/` is the single source of truth. `.agents/skills` and `.claude/skills`
 are read-only aliases for agent runtimes; never edit the aliases directly.
@@ -29,9 +28,29 @@ underlying storage client, see the [ovstorage skills catalog](https://github.com
 ## Skill Structure
 
 Each kebab-case subdirectory contains one `SKILL.md`. Its YAML frontmatter
-names the skill, describes activation conditions, and may declare metadata and
-tools. The body defines inputs, prerequisites, instructions, validation,
+names the skill, describes activation conditions, and may declare a license.
+Put `author`, `version`, and `tags` under `metadata:`; validators ignore them at
+the root. The body defines inputs, prerequisites, instructions, validation,
 limitations, troubleshooting, and references as needed by that workflow.
+
+Skills listed in the [NVIDIA skill catalog](https://github.com/NVIDIA/skills)
+also carry its onboarding files next to `SKILL.md`:
+
+| File | Content | Author |
+| --- | --- | --- |
+| `evals/evals.json` | Evaluation tasks, including cases where the skill must not load | Skill owner |
+| `evals/EVAL.md`, `evals/config.yml` | How to grade the tasks; evaluator settings | Skill owner |
+| `skill-card.md` | Release record: owner, license, use case, risks, output | Skill owner; NVSkills CI adds evaluation results |
+| `BENCHMARK.md` | Measured with-skill and baseline results | SkillEvaluator |
+| `skill.oms.sig` | Signature over the skill directory | NVSkills CI |
+
+Change a signed skill only together with a new evaluation and signature: any
+edit to a file in the directory invalidates `skill.oms.sig`.
+
+SkillEvaluator runs each task once, in a sandbox with no GPU and no one to
+answer questions. Write every prompt so that it can be completed there: give
+the details the skill would otherwise ask for, and for a GPU workflow either
+ask for the steps or test the fallback when the renderer cannot start.
 
 ## Tested Code References
 

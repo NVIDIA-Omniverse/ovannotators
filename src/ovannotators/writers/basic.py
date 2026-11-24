@@ -265,7 +265,8 @@ class BasicWriterConfig:
             in that set are ignored.
         video_dir: Directory (relative to the backend root) the MP4 files are
             written to.  An empty string writes them at the root.
-        video_codec: ``"h264"`` (default) or ``"hevc"``.
+        video_codec: ``"h264"`` (default), ``"hevc"``, or ``"av1"`` (Ada
+            Lovelace or newer GPU).
         video_lossless: Preserve normalized uint8 RGB pixels exactly with
             HEVC 4:4:4. Requires even, fixed dimensions; alpha is not retained.
         video_preset: Optional NVENC ``P1`` through ``P7`` preset. None keeps
@@ -980,7 +981,8 @@ def _format_camera_params(array: np.ndarray) -> dict[str, Any]:
 
     The output mirrors the ovrtx payload semantics:
 
-    - ``view_transform``: 4×4 camera-to-world matrix (flattened, column-major).
+    - ``view_transform``: 4×4 world-to-camera matrix that multiplies row
+      vectors, so its translation is the last row (flattened, column-major).
     - ``projection``: 4×4 GL/NDC projection matrix (flattened, column-major).
     - ``camera_model``: projection model string (e.g. ``"pinhole"``).
     - Derived ``intrinsics`` block with ``fx``, ``fy``, ``cx``, ``cy`` and
@@ -1034,14 +1036,10 @@ def _format_camera_params(array: np.ndarray) -> dict[str, Any]:
     cy = height / 2.0
     K = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]  # row-major 3x3
 
-    # --- Derived extrinsics (world-to-camera) ---
-    try:
-        world_to_cam = np.linalg.inv(view_transform)
-    except np.linalg.LinAlgError:
-        world_to_cam = np.eye(4, dtype=np.float64)
-
-    R_w2c = world_to_cam[:3, :3].ravel().tolist()  # row-major 3x3
-    t_w2c = world_to_cam[:3, 3].tolist()
+    # --- Derived extrinsics (world-to-camera, column-vector convention) ---
+    # view_transform multiplies row vectors: cam = [world, 1] @ view_transform.
+    R_w2c = view_transform[:3, :3].T.ravel().tolist()  # row-major 3x3
+    t_w2c = view_transform[3, :3].tolist()
 
     return {
         # Raw payload fields
@@ -1117,7 +1115,7 @@ def _json_payload(
     if var_name in ("SemanticIdMap", "StableIdMap"):
         # Already-decoded dicts pass through; raw ovrtx buffers (e.g. from
         # extract(decode=False)) are decoded here rather than dumped as bytes.
-        if isinstance(array, dict):
+        if isinstance(array, dict) and "tensors" not in array:
             return array
         return decode_id_string_map(array)
     if var_name == "StableIdSemanticIdMap":

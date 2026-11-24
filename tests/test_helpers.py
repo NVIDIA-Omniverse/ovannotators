@@ -35,11 +35,15 @@ from ovannotators.writers._helpers import (
     OVRTX_BBOX3D_DTYPE,
     OVRTX_CAMERA_PARAMS_DTYPE,
     OVRTX_INSTANCE_MAP_DTYPE,
+    OVRTX_INSTANCE_TOKEN_DTYPE,
+    OVRTX_OCCLUSION_DTYPE,
     OVRTX_STABLE_SEMANTIC_ID_DTYPE,
     decode_bbox_2d,
     decode_bbox_3d,
     decode_camera_params,
     decode_instance_map,
+    decode_instance_token_map,
+    decode_occlusion,
     decode_semantic_id_map,
     decode_stable_id_semantic_id_map,
     extract_camera_params,
@@ -50,8 +54,13 @@ from ovannotators.writers._helpers import (
     iter_bboxes_3d,
     mask_to_polygon,
     mask_to_rle,
+    occlusion_by_stable_id,
     point_cloud_from_depth,
+    pose_in_opencv_camera,
+    rotation_and_scale,
+    rotation_without_scale,
     to_rgb_uint8,
+    world_to_opencv_camera,
 )
 
 
@@ -124,7 +133,7 @@ def _make_bbox3d(boxes):
         arr[i]["x_min"], arr[i]["y_min"], arr[i]["z_min"] = lo
         arr[i]["x_max"], arr[i]["y_max"], arr[i]["z_max"] = hi
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = translate
+        transform[3, :3] = translate
         arr[i]["transform"] = transform
     return arr
 
@@ -201,6 +210,16 @@ class TestIterBboxes3D:
     def test_empty_array_yields_nothing(self):
         assert list(iter_bboxes_3d(np.zeros(0, dtype=OVRTX_BBOX3D_DTYPE))) == []
 
+    def test_translation_is_read_from_last_row(self):
+        arr = np.zeros(1, dtype=OVRTX_BBOX3D_DTYPE)
+        arr[0]["x_min"], arr[0]["y_min"], arr[0]["z_min"] = -1, -1, -1
+        arr[0]["x_max"], arr[0]["y_max"], arr[0]["z_max"] = 1, 1, 1
+        transform = np.eye(4, dtype=np.float32)
+        transform[3, :3] = (500, 500, 500)
+        arr[0]["transform"] = transform
+        b = list(iter_bboxes_3d(arr))[0]
+        np.testing.assert_allclose(b.center, [500, 500, 500])
+
     def test_ovrtx_dtype_center_extent_from_transform(self):
         arr = np.zeros(1, dtype=OVRTX_BBOX3D_DTYPE)
         arr[0]["instance_id"] = _id128(20)
@@ -208,7 +227,7 @@ class TestIterBboxes3D:
         arr[0]["x_min"], arr[0]["y_min"], arr[0]["z_min"] = -1, -1, -2
         arr[0]["x_max"], arr[0]["y_max"], arr[0]["z_max"] = 1, 1, 2
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = (5, 2, 10)
+        transform[3, :3] = (5, 2, 10)
         arr[0]["transform"] = transform
         b = list(iter_bboxes_3d(arr, {10: "box"}))[0]
         np.testing.assert_allclose(b.center, [5, 2, 10])
@@ -223,10 +242,12 @@ class TestIterBboxes3D:
         arr = np.zeros(1, dtype=OVRTX_BBOX3D_DTYPE)
         arr[0]["x_min"], arr[0]["y_min"], arr[0]["z_min"] = 0, 0, 0
         arr[0]["x_max"], arr[0]["y_max"], arr[0]["z_max"] = 2, 0, 0
-        # 90-degree rotation about Z, translation (0, 0, 0)
+        # 90-degree rotation about Z, translation (0, 0, 0). The transform
+        # multiplies row vectors, so its 3x3 block is the transpose of the
+        # column-vector rotation matrix.
         rot = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=np.float32)
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, :3] = rot
+        transform[:3, :3] = rot.T
         arr[0]["transform"] = transform
         b = list(iter_bboxes_3d(arr))[0]
         # local center (1, 0, 0) rotates to (0, 1, 0)
@@ -269,15 +290,22 @@ class TestExtractCameraParams:
         assert abs(params.fov_x - math.radians(90)) < 1e-6
         assert abs(params.fov_y - 2.0 * math.atan(240.0 / 320.0)) < 1e-6
 
-    def test_extrinsics_invert_view_transform(self):
+    def test_extrinsics_read_row_vector_world_to_camera(self):
         arr = self._params(math.radians(60), 640, 480)
+        # World-to-camera view matrix for row vectors: translation is the
+        # last row and the 3x3 block is the transpose of the column rotation.
+        rot = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=np.float64)
         view = np.eye(4, dtype=np.float32)
-        view[:3, 3] = (1, 2, 3)  # camera-to-world translation
+        view[:3, :3] = rot.T
+        view[3, :3] = (1, 2, 3)
         arr[0]["view_transform"] = view
         params = extract_camera_params(arr)
-        np.testing.assert_allclose(params.R, np.eye(3), atol=1e-6)
-        # world-to-camera translation is the negated camera position
-        np.testing.assert_allclose(params.t, [-1, -2, -3], atol=1e-5)
+        np.testing.assert_allclose(params.R, rot, atol=1e-6)
+        np.testing.assert_allclose(params.t, [1, 2, 3], atol=1e-6)
+        # R @ world + t reproduces [world, 1] @ view for an off-origin point.
+        world = np.array([4.0, -5.0, 6.0])
+        expected = (np.append(world, 1.0) @ view.astype(np.float64))[:3]
+        np.testing.assert_allclose(params.R @ world + params.t, expected, atol=1e-5)
 
 
 # ---------------------------------------------------------------------------
@@ -615,15 +643,6 @@ def test_decode_camera_params_structured_passthrough():
     assert _helpers._to_numpy(out).dtype == OVRTX_CAMERA_PARAMS_DTYPE
 
 
-def test_extract_camera_params_singular_view_falls_back():
-    from ovannotators.writers import _helpers
-
-    arr = _make_camera_params()
-    arr[0]["view_transform"] = np.zeros((4, 4), dtype=np.float32)  # singular
-    cam = _helpers.extract_camera_params(arr)
-    assert np.allclose(cam.R, np.eye(3))
-
-
 # ---------------------------------------------------------------------------
 # point_cloud_from_depth
 # ---------------------------------------------------------------------------
@@ -758,3 +777,361 @@ class TestToRgbUint8:
         """Codecs require contiguous buffers; the alpha-slice view is copied."""
         out = to_rgb_uint8(np.zeros((2, 2, 4), dtype=np.uint8))
         assert out.flags["C_CONTIGUOUS"]
+
+
+# ---------------------------------------------------------------------------
+# OpenCV camera frame
+# ---------------------------------------------------------------------------
+
+
+class TestOpenCvCameraFrame:
+    def _camera(self, translation):
+        arr = np.zeros(1, dtype=OVRTX_CAMERA_PARAMS_DTYPE)
+        view = np.eye(4, dtype=np.float32)
+        view[3, :3] = translation
+        arr[0]["view_transform"] = view
+        arr[0]["resolution"] = (640, 480)
+        arr[0]["fov_x"] = math.radians(60)
+        return extract_camera_params(arr)
+
+    def test_usd_camera_frame_is_flipped_to_opencv(self):
+        # A point 20 units in front of a USD camera (-Z) has +Z depth in OpenCV.
+        cam = self._camera((0, 0, -20))
+        r, t = world_to_opencv_camera(cam)
+        np.testing.assert_allclose(r, np.diag([1, -1, -1]))
+        np.testing.assert_allclose(r @ np.zeros(3) + t, [0, 0, 20])
+
+    def test_pose_rotates_and_translates_into_camera(self):
+        cam = self._camera((0, 0, -20))
+        rotation, center = pose_in_opencv_camera(
+            cam, np.eye(3), np.array([5.0, 2.0, 10.0])
+        )
+        np.testing.assert_allclose(center, [5, -2, 10])
+        np.testing.assert_allclose(rotation, np.diag([1, -1, -1]))
+
+    def test_pose_composes_rotations_in_world_to_camera_order(self):
+        # Rotations about different axes do not commute, so a reversed
+        # multiplication changes the answer. Camera rotated 90 degrees about Y
+        # (world to USD camera), object rotated 90 degrees about X.
+        def rot_y(a):
+            c, s = math.cos(a), math.sin(a)
+            return np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+
+        def rot_x(a):
+            c, s = math.cos(a), math.sin(a)
+            return np.array([[1, 0, 0], [0, c, -s], [0, s, c]])
+
+        r_cam, r_obj = rot_y(math.pi / 2), rot_x(math.pi / 2)
+        arr = np.zeros(1, dtype=OVRTX_CAMERA_PARAMS_DTYPE)
+        view = np.eye(4, dtype=np.float32)
+        view[:3, :3] = r_cam.T  # row-vector convention
+        arr[0]["view_transform"] = view
+        arr[0]["resolution"] = (640, 480)
+        arr[0]["fov_x"] = math.radians(60)
+        cam = extract_camera_params(arr)
+
+        flip = np.diag([1.0, -1.0, -1.0])
+        expected = flip @ r_cam @ r_obj
+        assert not np.allclose(expected, flip @ r_obj @ r_cam)
+        rotation, _ = pose_in_opencv_camera(cam, r_obj, np.zeros(3))
+        np.testing.assert_allclose(rotation, expected, atol=1e-6)
+
+    def test_rotation_without_scale_normalizes_each_axis(self):
+        rot = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+        scaled = rot * np.array([2.0, 3.0, 4.0])  # scale each axis column
+        np.testing.assert_allclose(rotation_without_scale(scaled), rot, atol=1e-12)
+        np.testing.assert_allclose(rotation_without_scale(rot), rot, atol=1e-12)
+
+    def test_rotation_and_scale_returns_unit_axes_and_per_axis_scale(self):
+        rot = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+        unit, scale = rotation_and_scale(rot * np.array([2.0, 3.0, 4.0]))
+        np.testing.assert_allclose(unit, rot, atol=1e-12)
+        np.testing.assert_allclose(scale, [2.0, 3.0, 4.0], atol=1e-12)
+
+    def test_rotation_without_scale_keeps_a_zero_axis(self):
+        out = rotation_without_scale(np.zeros((3, 3)))
+        np.testing.assert_array_equal(out, np.zeros((3, 3)))
+
+
+# ovrtx 0.7 named-tensor annotator layout
+# ---------------------------------------------------------------------------
+# Shapes and values follow a real ovrtx 0.7 capture of tests/data/test_scene.usda.
+
+
+def _ids(*low_words: int) -> np.ndarray:
+    ids = np.zeros((len(low_words), 4), dtype=np.uint32)
+    ids[:, 0] = low_words
+    return ids
+
+
+def _label_table(ids: np.ndarray, labels: list[bytes]) -> dict:
+    offsets = np.cumsum([0, *(len(label) for label in labels)]).astype(np.uint64)
+    data = np.frombuffer(b"".join(labels), dtype=np.uint8)
+    return {
+        "tensors": {"id": ids, "label_offsets": offsets, "label_data": data},
+        "params": {},
+    }
+
+
+class TestOvrtx07Decoders:
+    def test_bbox_2d_keeps_valid_rows_and_splits_extent(self):
+        """Rows past ``valid_count`` are dropped; extent is min/max corners."""
+        extent = np.array(
+            [[[361, 196], [485, 320]], [[578, 307], [701, 449]], [[9, 9], [9, 9]]],
+            dtype=np.int32,
+        )
+        payload = {
+            "tensors": {
+                "id": _ids(11, 12, 0),
+                "semantic_id": _ids(2, 3, 0),
+                "extent": extent,
+                "valid_count": np.array([2], dtype=np.uint32),
+            },
+            "params": {},
+        }
+        decoded = decode_bbox_2d(payload)
+        assert decoded.dtype == OVRTX_BBOX2D_DTYPE
+        assert decoded["instance_id"][:, 0].tolist() == [11, 12]
+        assert decoded["semantic_id"][:, 0].tolist() == [2, 3]
+        assert decoded["x_min"].tolist() == [361, 578]
+        assert decoded["y_min"].tolist() == [196, 307]
+        assert decoded["x_max"].tolist() == [485, 701]
+        assert decoded["y_max"].tolist() == [320, 449]
+
+    @pytest.mark.parametrize(
+        ("count", "expected_ids"),
+        [(0, []), (None, [11, 12, 13]), (4, [11, 12, 13])],
+        ids=["zero", "missing", "over-capacity"],
+    )
+    def test_bbox_2d_valid_count_boundaries(self, count, expected_ids):
+        tensors = {
+            "id": _ids(11, 12, 13),
+            "semantic_id": _ids(2, 3, 4),
+            "extent": np.zeros((3, 2, 2), dtype=np.int32),
+        }
+        if count is not None:
+            tensors["valid_count"] = np.array([count], dtype=np.uint32)
+        decoded = decode_bbox_2d({"tensors": tensors, "params": {}})
+        assert decoded["instance_id"][:, 0].tolist() == expected_ids
+
+    def test_bbox_3d_unpacks_extent_and_transform(self):
+        """3-D extent splits into per-axis min/max; object_to_world is kept."""
+        extent = np.array(
+            [[[-50, -50, -50], [50, 50, 50]], [[0, 0, 0], [0, 0, 0]]], dtype=np.float32
+        )
+        transform = np.stack(
+            [np.eye(4, dtype=np.float32), np.zeros((4, 4), np.float32)]
+        )
+        transform[0, 3, :3] = [100.0, 0.0, -150.0]
+        payload = {
+            "tensors": {
+                "id": _ids(7, 0),
+                "semantic_id": _ids(4, 0),
+                "extent": extent,
+                "object_to_world": transform,
+                "valid_count": np.array([1], dtype=np.uint32),
+            },
+            "params": {},
+        }
+        decoded = decode_bbox_3d(payload)
+        assert decoded.dtype == OVRTX_BBOX3D_DTYPE
+        assert len(decoded) == 1
+        assert [decoded[f"{a}_min"][0] for a in "xyz"] == [-50.0] * 3
+        assert [decoded[f"{a}_max"][0] for a in "xyz"] == [50.0] * 3
+        np.testing.assert_array_equal(decoded["transform"][0], transform[0])
+
+    def test_id_string_maps_use_label_offsets(self):
+        """Labels are sliced from ``label_data`` by consecutive offsets."""
+        payload = _label_table(_ids(2, 3), [b"class: sphere; ", b"class: cone; "])
+        assert decode_semantic_id_map(payload) == {
+            2: "class: sphere;",
+            3: "class: cone;",
+        }
+        assert id_label_map_from_render_vars({"SemanticIdMap": payload}) == {
+            2: "class: sphere;",
+            3: "class: cone;",
+        }
+        paths = _label_table(_ids(5), [b"/Replicator/Cube_Xform/Cube"])
+        assert id_prim_path_map_from_render_vars({"StableIdMap": paths}) == {
+            5: "/Replicator/Cube_Xform/Cube"
+        }
+
+    def test_stable_id_semantic_id_map_pairs_tensors(self):
+        """``stable_id`` and ``semantic_id`` tensors zip into record pairs."""
+        payload = {
+            "tensors": {"stable_id": _ids(10, 11), "semantic_id": _ids(2, 3)},
+            "params": {},
+        }
+        decoded = decode_stable_id_semantic_id_map(payload)
+        assert decoded.dtype == OVRTX_STABLE_SEMANTIC_ID_DTYPE
+        assert decoded["stable_id"][:, 0].tolist() == [10, 11]
+        assert decoded["semantic_id"][:, 0].tolist() == [2, 3]
+
+    def test_camera_params_maps_named_params(self):
+        """Named params land in the legacy record fields."""
+        view = np.arange(16, dtype=np.float32).reshape(4, 4)
+        proj = np.eye(4, dtype=np.float32) * 2
+        f32 = lambda v: np.array([v], dtype=np.float32)  # noqa: E731
+        params = {
+            "view_matrix": view,
+            "projection_matrix": proj,
+            "meters_per_scene_unit": f32(0.01),
+            "render_product_resolution": np.array([1280, 720], dtype=np.uint32),
+            "near_far": np.array([1.0, 1.0e6], dtype=np.float32),
+            "camera_model": np.frombuffer(b"pinhole", dtype=np.uint8),
+            "focal_length": f32(1.814756),
+            "fov_x_radians": f32(1.0471977),
+            "ftheta_cx": f32(3.0),
+            "ftheta_cy": f32(4.0),
+            **{f"ftheta_poly_{c}": f32(i) for i, c in enumerate("abcdef")},
+            "lens_p": np.zeros(2, np.float32),
+            "lens_s": np.zeros(4, np.float32),
+        }
+        decoded = np.asarray(decode_camera_params({"tensors": {}, "params": params}))
+        assert decoded.dtype == OVRTX_CAMERA_PARAMS_DTYPE
+        record = decoded[0]
+        np.testing.assert_array_equal(record["view_transform"], view)
+        np.testing.assert_array_equal(record["projection"], proj)
+        assert record["resolution"].tolist() == [1280, 720]
+        assert record["clipping_plane"].tolist() == [1.0, 1.0e6]
+        assert record["projection_model"] == b"pinhole"
+        assert record["fisheye_optical_centre"].tolist() == [3.0, 4.0]
+        assert record["fisheye_polynomial"].tolist() == [0, 1, 2, 3, 4, 5]
+        assert record["fov_x"] == pytest.approx(1.0471977)
+        assert record["focal_length"] == pytest.approx(1.814756)
+        assert record["meters_per_scene_unit"] == pytest.approx(0.01)
+
+
+# ---------------------------------------------------------------------------
+# Occlusion decoding
+# ---------------------------------------------------------------------------
+
+
+class TestOcclusion:
+    def test_decode_occlusion_reads_12_byte_records(self):
+        arr = np.zeros(2, dtype=OVRTX_OCCLUSION_DTYPE)
+        arr["instance_id"] = [6, 7]
+        arr["ratio"] = [0.25, -1.0]
+        decoded = decode_occlusion(arr.tobytes())
+        assert decoded["instance_id"].tolist() == [6, 7]
+        np.testing.assert_allclose(decoded["ratio"], [0.25, -1.0])
+
+    def test_decode_occlusion_rejects_partial_record(self):
+        with pytest.raises(ValueError, match="multiple of 12"):
+            decode_occlusion(b"\x00" * 13)
+
+    def test_decode_instance_token_map_checks_header_count(self):
+        tokens = np.zeros(3, dtype=OVRTX_INSTANCE_TOKEN_DTYPE)
+        tokens[0]["instance_id"] = 2
+        assert len(decode_instance_token_map(tokens.tobytes())) == 3
+        tokens[0]["instance_id"] = 5
+        with pytest.raises(ValueError, match="header count"):
+            decode_instance_token_map(tokens.tobytes())
+
+    # Values from an ovrtx 0.7 capture of the DOPE occlusion scene.
+    _OCCLUSION_TENSORS = {
+        "tensors": {
+            "instance_id": np.array([3, 4, 2, 5, 1], dtype=np.uint32),
+            "render_tile_id": np.zeros(5, dtype=np.uint32),
+            "occlusion_ratio": np.array(
+                [0.0, 0.0, 0.3272, 0.0, 0.0682], dtype=np.float32
+            ),
+        },
+        "params": {},
+    }
+    _TOKEN_TENSORS = {
+        "tensors": {
+            "instance_id": np.array([4, 2, 3, 5, 1], dtype=np.uint32),
+            "prim_token": np.array(
+                [62930689, 62931201, 62931713, 62932225, 62932737], dtype=np.uint64
+            ),
+            "prototype_index": np.zeros(5, dtype=np.uint32),
+            "instance_index": np.zeros(5, dtype=np.uint32),
+        },
+        "params": {
+            "min_instance_id": np.array([1], dtype=np.uint32),
+            "max_instance_id": np.array([5], dtype=np.uint32),
+            "render_tile_count": np.array([1], dtype=np.uint32),
+        },
+    }
+
+    def test_decode_occlusion_reads_named_tensors(self):
+        decoded = decode_occlusion(self._OCCLUSION_TENSORS)
+        assert decoded.dtype == OVRTX_OCCLUSION_DTYPE
+        assert decoded["instance_id"].tolist() == [3, 4, 2, 5, 1]
+        assert decoded["tile_id"].tolist() == [0] * 5
+        np.testing.assert_allclose(decoded["ratio"], [0.0, 0.0, 0.3272, 0.0, 0.0682])
+
+    def test_decode_instance_token_map_rebuilds_header_from_params(self):
+        decoded = decode_instance_token_map(self._TOKEN_TENSORS)
+        assert decoded.dtype == OVRTX_INSTANCE_TOKEN_DTYPE
+        assert int(decoded[0]["instance_id"]) == 5
+        assert int(decoded[0]["prim_token"]) == (5 << 32) | 1
+        assert decoded["instance_id"][1:].tolist() == [4, 2, 3, 5, 1]
+        assert decoded["prim_token"][1:].tolist() == [
+            62930689,
+            62931201,
+            62931713,
+            62932225,
+            62932737,
+        ]
+
+    def test_occlusion_resolves_from_undecoded_ovrtx_07_vars(self):
+        # Instance 2 -> map index 1 -> table entry 2; instance 1 -> index 0 -> entry 4.
+        stable_ids = np.array(
+            [[n, 0, 0, 0] for n in (10, 20, 30, 40, 50)], dtype=np.uint32
+        )
+        render_vars = {
+            "OcclusionSD": self._OCCLUSION_TENSORS,
+            "InstanceIdTokenMapSD": self._TOKEN_TENSORS,
+            "InstanceMap": np.array([4, 2, 3, 1, 0], dtype=np.uint32),
+            "StableIdSemanticIdMap": {
+                "tensors": {"stable_id": stable_ids, "semantic_id": stable_ids},
+                "params": {},
+            },
+        }
+        result = occlusion_by_stable_id(render_vars)
+        assert result[(30, 0, 0, 0)] == pytest.approx(0.3272)
+        assert result[(50, 0, 0, 0)] == pytest.approx(0.0682)
+        assert len(result) == 5
+
+    def _vars(self, ratios, instance_ids, table):
+        occlusion = np.zeros(len(ratios), dtype=OVRTX_OCCLUSION_DTYPE)
+        occlusion["instance_id"] = instance_ids
+        occlusion["ratio"] = ratios
+        tokens = np.zeros(len(table) + 1, dtype=OVRTX_INSTANCE_TOKEN_DTYPE)
+        tokens[0]["instance_id"] = len(table)
+        tokens[0]["prim_token"] = min(instance_ids)
+        instance_map = np.zeros(len(table), dtype=OVRTX_INSTANCE_MAP_DTYPE)
+        instance_map["instance_index"] = np.arange(len(table))
+        instance_map["stable_semantic_index"] = table
+        stable = np.zeros(2, dtype=OVRTX_STABLE_SEMANTIC_ID_DTYPE)
+        stable["stable_id"] = [(11, 0, 0, 0), (22, 0, 0, 0)]
+        return {
+            "OcclusionSD": occlusion,
+            "InstanceIdTokenMapSD": tokens,
+            "InstanceMap": instance_map,
+            "StableIdSemanticIdMap": stable,
+        }
+
+    def test_returns_none_when_a_required_var_is_missing(self):
+        render_vars = self._vars([0.1], [4], [0])
+        del render_vars["InstanceMap"]
+        assert occlusion_by_stable_id(render_vars) is None
+
+    def test_maps_renderer_instances_to_stable_ids(self):
+        # Instances 4 and 5 -> table entries 1 and 0.
+        render_vars = self._vars([0.1, 0.4], [4, 5], [1, 0])
+        assert occlusion_by_stable_id(render_vars) == {
+            (22, 0, 0, 0): pytest.approx(0.1),
+            (11, 0, 0, 0): pytest.approx(0.4),
+        }
+
+    def test_averages_instances_sharing_a_stable_id(self):
+        render_vars = self._vars([0.2, 0.6], [4, 5], [0, 0])
+        result = occlusion_by_stable_id(render_vars)
+        assert result == {(11, 0, 0, 0): pytest.approx(0.4)}
+
+    def test_skips_negative_ratios_and_invalid_map_entries(self):
+        render_vars = self._vars([-1.0, 0.5], [4, 5], [0, 0xFFFFFFFF])
+        assert occlusion_by_stable_id(render_vars) == {}

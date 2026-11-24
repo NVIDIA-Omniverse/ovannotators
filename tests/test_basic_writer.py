@@ -270,16 +270,6 @@ class TestBasicJsonBranches:
             {"a": 3, "b": pytest.approx(4.0)},
         ]
 
-    def test_format_camera_params_singular_view_transform(self):
-        """A non-invertible view transform falls back to identity extrinsics."""
-        arr = np.zeros(1, dtype=OVRTX_CAMERA_PARAMS_DTYPE)
-        arr[0]["view_transform"] = np.zeros((4, 4), dtype=np.float32)  # singular
-        arr[0]["projection"] = np.eye(4, dtype=np.float32)
-        arr[0]["resolution"] = (64, 48)
-        out = basic._format_camera_params(arr)
-        assert out["extrinsics"]["R_world_to_camera"] == [1, 0, 0, 0, 1, 0, 0, 0, 1]
-        assert out["extrinsics"]["t_world_to_camera"] == [0, 0, 0]
-
     def test_json_payload_generic_array(self):
         """A non-bbox, non-camera var falls through to a generic array dump."""
         payload = basic._json_payload("SomeOtherVar", np.array([1, 2, 3]), {})

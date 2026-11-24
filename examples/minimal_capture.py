@@ -6,7 +6,7 @@
 This example needs an NVIDIA RTX-capable GPU, CUDA, ``ovrtx``, and ``ovstage``.
 The application owns an ``ovstage.Stage``; the ovrtx renderer borrows it.
 
-    pip install 'ovrtx>=0.5,<0.6' 'ovstage>=0.2,<0.3' \
+    pip install 'ovrtx>=0.5,<0.8' 'ovstage>=0.2,<0.5' \
       --extra-index-url https://pypi.nvidia.com/
     python examples/minimal_capture.py
 
@@ -44,7 +44,7 @@ with ExitStack() as cleanup:
     outputs = frame = None
     try:
         ordinal = 1
-        ovstage.population.open_usd(stage, scene_path, ordinal=ordinal, time_code=0.0)
+        ovstage.population.open_usd(stage, scene_path, ordinal, 0.0)
         stage.advance_write_floor(ordinal).wait()
 
         frame_id = 0

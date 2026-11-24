@@ -258,6 +258,59 @@ def test_registry_and_direct_import_are_independent_from_legacy_lerobot():
 
 
 @pytest.mark.integration
+def test_reused_buffers_preserve_episode_images_vectors_and_statistics(
+    disk_backend, priority_profile_fixture, monkeypatch
+):
+    encoded = []
+
+    def encode_video(frames, fps):
+        encoded.append(np.stack(frames))
+        return b"mock-mp4"
+
+    monkeypatch.setattr(
+        "ovannotators.profile_writers.groot_lerobot_v2._encode_video", encode_video
+    )
+    samples = priority_profile_fixture.samples[0]
+    observations = dict(samples[0].observations)
+    policy_signals = dict(samples[0].policy_signals)
+    buffers = {**observations, **policy_signals}
+    expected = {
+        key: np.stack(
+            [
+                ({**sample.observations, **sample.policy_signals})[key].data.copy()
+                for sample in samples
+            ]
+        )
+        for key in ("camera.front", "camera.wrist", "observation.state", "action")
+    }
+    writer = GrootLeRobotV2Writer(_config())
+    writer.begin_episode(priority_profile_fixture.episodes[0], disk_backend)
+    for index, sample in enumerate(samples):
+        for key, values in expected.items():
+            np.copyto(buffers[key].data, values[index])
+        writer.write_sample(
+            replace(sample, observations=observations, policy_signals=policy_signals),
+            disk_backend,
+        )
+    for tensor in buffers.values():
+        tensor.data.fill(99)
+    writer.end_episode(disk_backend)
+    writer.finalize(disk_backend)
+    table = pq.read_table(
+        io.BytesIO(disk_backend.read("data/chunk-000/episode_000000.parquet"))
+    )
+    for key in ("observation.state", "action"):
+        np.testing.assert_allclose(table[key].to_pylist(), expected[key])
+    for frames, key in zip(encoded, _CAMERAS, strict=True):
+        np.testing.assert_array_equal(frames, expected[key])
+    stats = json.loads(disk_backend.read("meta/stats.json"))
+    np.testing.assert_allclose(stats["action"]["mean"], expected["action"].mean(axis=0))
+    np.testing.assert_allclose(
+        stats["observation.state"]["mean"], expected["observation.state"].mean(axis=0)
+    )
+
+
+@pytest.mark.integration
 def test_writer_emits_pinned_layout_statistics_and_semantics(
     disk_backend, priority_profile_fixture, monkeypatch
 ):

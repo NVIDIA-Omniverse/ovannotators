@@ -37,6 +37,9 @@ COCOWriter, COCOWriterConfig
 KITTIWriter, KITTIWriterConfig
 YOLOWriter, YOLOWriterConfig
 BOPWriter, BOPWriterConfig
+DOPEWriter, DOPEWriterConfig
+CenterPoseWriter, CenterPoseWriterConfig
+YCBVideoWriter, YCBVideoWriterConfig
 LeRobotWriter, LeRobotWriterConfig
 CosmosTransferWriter, CosmosTransferWriterConfig
 """
@@ -54,14 +57,20 @@ from ovannotators.writers._registry import WriterRegistry
 # Import concrete writers to trigger @WriterRegistry.register at module load.
 from ovannotators.writers.basic import BasicWriter, BasicWriterConfig
 from ovannotators.writers.bop import BOPWriter, BOPWriterConfig
+from ovannotators.writers.centerpose import (
+    CenterPoseWriter,
+    CenterPoseWriterConfig,
+)
 from ovannotators.writers.coco import COCOWriter, COCOWriterConfig
-from ovannotators.writers.kitti import KITTIWriter, KITTIWriterConfig
 from ovannotators.writers.cosmos_transfer import (
     CosmosTransferWriter,
     CosmosTransferWriterConfig,
 )
+from ovannotators.writers.dope import DOPEWriter, DOPEWriterConfig
+from ovannotators.writers.kitti import KITTIWriter, KITTIWriterConfig
 from ovannotators.writers.lerobot import LeRobotWriter, LeRobotWriterConfig
 from ovannotators.writers.openlabel import OpenLABELWriter, OpenLABELWriterConfig
+from ovannotators.writers.ycb_video import YCBVideoWriter, YCBVideoWriterConfig
 from ovannotators.writers.yolo import YOLOWriter, YOLOWriterConfig
 
 __all__ = [
@@ -77,6 +86,12 @@ __all__ = [
     "YOLOWriterConfig",
     "BOPWriter",
     "BOPWriterConfig",
+    "DOPEWriter",
+    "DOPEWriterConfig",
+    "CenterPoseWriter",
+    "CenterPoseWriterConfig",
+    "YCBVideoWriter",
+    "YCBVideoWriterConfig",
     "LeRobotWriter",
     "LeRobotWriterConfig",
     "OpenLABELWriter",

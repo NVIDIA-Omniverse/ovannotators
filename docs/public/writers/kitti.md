@@ -28,12 +28,18 @@ Field details:
   an integer status; other fields are numeric. Truncation and occlusion are
   both zero placeholders.
 - **2D Bounding Boxes:** Box values use pixel coordinates.
-- **3D Bounding Boxes and Dimensions:** Dimensions and locations use the
-  supplied camera-space length units (supply metres for KITTI). Dimensions
-  equal twice the 3D box half-extents. Location refers to bottom-centre with
-  camera Y down.
+- **3D Bounding Boxes and Dimensions:** Supply world-space 3D boxes and the
+  camera; the writer transforms each box into the OpenCV camera frame (+Z
+  forward, +Y down). Dimensions and locations keep the supplied length units
+  (use metres for KITTI) and are not rescaled. Dimensions equal twice the 3D box
+  half-extents, including any object scale in the box transform. Location is the
+  KITTI bottom centre: the box centre moved half a height down the camera's +Y
+  axis.
 - **Orientation and Angles:** Angles are in radians. `alpha` represents the
-  observation angle, and `rotation_y` represents yaw.
+  observation angle. `rotation_y` is the yaw of the box's length axis (local
+  Z, the axis `length` measures), which KITTI places along +X at zero. KITTI
+  stores yaw only, so a box tilted relative to the camera loses its pitch and
+  roll; the devkit rebuilds it upright around the same centre.
 - **Missing Data:** Missing matched 3D boxes produce sentinel values.
 
 Calibration repeats the intrinsic projection in `P0` through `P3`, uses identity

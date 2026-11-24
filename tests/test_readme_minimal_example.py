@@ -172,10 +172,10 @@ def test_minimal_capture_publishes_each_update_before_rendering(
     ovstage_module = ModuleType("ovstage")
     ovstage_module.Stage = FakeStage
     ovstage_module.population = SimpleNamespace(
-        open_usd=lambda stage, path, *, ordinal, time_code: events.append(
-            ("open", path, ordinal, time_code)
+        open_usd=lambda stage, path, ordinal, time, /: events.append(
+            ("open", path, ordinal, time)
         ),
-        update_from_usd_time=lambda stage, ordinal, time: events.append(
+        update_from_usd_time=lambda stage, ordinal, time, /: events.append(
             ("update", ordinal, float(time))
         ),
     )

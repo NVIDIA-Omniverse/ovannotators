@@ -24,12 +24,14 @@ from __future__ import annotations
 
 import io
 import json
+import math
 from typing import Any
 
 import numpy as np
 import pytest
 
 from ovannotators.exceptions import ConfigurationError, MissingRenderVarError
+from ovannotators.backends import DiskBackend, DiskBackendConfig
 from ovannotators.writers import (
     BasicWriter,
     BasicWriterConfig,
@@ -158,7 +160,7 @@ def _make_bbox3d(boxes):
         arr[i]["x_min"], arr[i]["y_min"], arr[i]["z_min"] = lo
         arr[i]["x_max"], arr[i]["y_max"], arr[i]["z_max"] = hi
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = translate
+        transform[3, :3] = translate
         arr[i]["transform"] = transform
     return arr
 
@@ -214,6 +216,9 @@ def test_registry_list_names_has_all_builtins() -> None:
         "kitti",
         "yolo",
         "bop",
+        "dope",
+        "centerpose",
+        "ycb_video",
         "lerobot",
         "cosmos_transfer",
     }.issubset(names)
@@ -265,6 +270,12 @@ def test_top_level_exports_writers_and_configs() -> None:
         "YOLOWriterConfig",
         "BOPWriter",
         "BOPWriterConfig",
+        "DOPEWriter",
+        "DOPEWriterConfig",
+        "CenterPoseWriter",
+        "CenterPoseWriterConfig",
+        "YCBVideoWriter",
+        "YCBVideoWriterConfig",
         "LeRobotWriter",
         "LeRobotWriterConfig",
         "CosmosTransferWriter",
@@ -541,7 +552,7 @@ def test_basic_writer_camera_params_non_identity_extrinsics() -> None:
         [0, 1, 0, 0],
         [s, 0, c, 0],
         [3, 4, 5, 1],
-    ]  # camera-to-world with translation in last row (row-vector convention)
+    ]  # world-to-camera, translation in the last row (row-vector convention)
     arr[0]["projection"] = np.eye(4)
     arr[0]["resolution"] = (640, 480)
     arr[0]["clipping_plane"] = (0.1, 100.0)
@@ -551,19 +562,17 @@ def test_basic_writer_camera_params_non_identity_extrinsics() -> None:
     key = next(k for k in backend.written if "camera_params.json" in k)
     payload = json.loads(backend.written[key])
     ext = payload["extrinsics"]
-    # world-to-camera t should recover -R^T @ translation
-    # With this view_transform (translation in last row), inv gives us
-    # the world-to-camera transform
+    # view_transform multiplies row vectors, so R is the transpose of its 3x3
+    # block and t is its last row.
     view = np.array(arr[0]["view_transform"], dtype=np.float64).reshape(4, 4)
-    expected_w2c = np.linalg.inv(view)
     np.testing.assert_allclose(
         ext["R_world_to_camera"],
-        expected_w2c[:3, :3].ravel().tolist(),
+        view[:3, :3].T.ravel().tolist(),
         atol=1e-5,
     )
     np.testing.assert_allclose(
         ext["t_world_to_camera"],
-        expected_w2c[:3, 3].tolist(),
+        view[3, :3].tolist(),
         atol=1e-5,
     )
     # Intrinsics: fov=90 deg, width=640 → fx = 320 / tan(45°) = 320
@@ -1164,6 +1173,100 @@ def test_kitti_writer_label_format(sample_render_vars) -> None:
         float(tok)
 
 
+def _camera_20_units_back(sample_render_vars: dict) -> dict:
+    """Return render vars whose camera sits at world (0, 0, 20), axes aligned.
+
+    ``view_transform`` is world-to-camera for row vectors, so the translation is
+    ``(0, 0, -20)``. The fixture's first box is centred at world (5, 2, 10), i.e.
+    (5, 2, -10) in the USD camera frame and (5, -2, 10) in the OpenCV frame.
+    """
+    cam = sample_render_vars["CameraParams"].copy()
+    view = np.eye(4, dtype=np.float32)
+    view[3, :3] = (0.0, 0.0, -20.0)
+    cam[0]["view_transform"] = view
+    return {**sample_render_vars, "CameraParams": cam}
+
+
+def test_kitti_writer_location_is_in_opencv_camera_frame(sample_render_vars) -> None:
+    backend = MockBackend()
+    KITTIWriter().write_frame(0, _camera_20_units_back(sample_render_vars), backend)
+    label_txt = backend.written["label_2/000000.txt"].decode().strip()
+    car = next(ln.split() for ln in label_txt.splitlines() if ln.startswith("car"))
+    x, y, z = (float(v) for v in car[11:14])
+    assert (x, z) == (5.0, 10.0)
+    # Bottom-centre: camera-frame y (-2) plus the half-height (1) of the box.
+    assert y == -1.0
+
+
+def _kitti_car_row(render_vars: dict) -> list[str]:
+    backend = MockBackend()
+    KITTIWriter().write_frame(0, render_vars, backend)
+    label_txt = backend.written["label_2/000000.txt"].decode().strip()
+    return next(ln.split() for ln in label_txt.splitlines() if ln.startswith("car"))
+
+
+def _car_box_pose(render_vars: dict, rotation: np.ndarray) -> dict:
+    """Return render vars whose first 3D box (the car) has ``rotation``."""
+    boxes = render_vars["SemanticBoundingBox3D"].copy()
+    transform = np.eye(4, dtype=np.float32)
+    transform[3, :3] = boxes[0]["transform"][3, :3]
+    transform[:3, :3] = rotation.T  # row-vector convention
+    boxes[0]["transform"] = transform
+    return {**render_vars, "SemanticBoundingBox3D": boxes}
+
+
+def test_kitti_writer_rotation_y_follows_the_length_axis(sample_render_vars) -> None:
+    # The car's length is its local Z axis (l = 2 * extent[2]); KITTI puts the
+    # length along +X at rotation_y == 0. Rotating the box about the world
+    # vertical must therefore move rotation_y by exactly that angle.
+    cam = _camera_20_units_back(sample_render_vars)
+    angle = 0.5
+    c, s = math.cos(angle), math.sin(angle)
+    yaw_about_y = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    base = float(_kitti_car_row(_car_box_pose(cam, np.eye(3)))[14])
+    turned = float(_kitti_car_row(_car_box_pose(cam, yaw_about_y))[14])
+    delta = (turned - base + math.pi) % (2 * math.pi) - math.pi
+    # World +Y is camera -Y (Y-down), so a +angle yaw about world Y reads as
+    # -angle about the camera's Y axis.
+    assert math.isclose(delta, -angle, abs_tol=1e-3)
+    # An unrotated box has its length (local Z) along camera -Z (OpenCV flips Z),
+    # which is KITTI yaw +pi/2 from the +X length axis.
+    assert math.isclose(base, math.pi / 2, abs_tol=1e-3)
+
+
+def test_kitti_writer_location_of_a_tilted_box_drops_the_tilt(
+    sample_render_vars,
+) -> None:
+    # KITTI stores yaw only, and the devkit rebuilds every box upright from
+    # ``location`` up the camera's -Y axis. Pitch the box 90 degrees about
+    # world X: its location must still sit half a height straight below the
+    # true centre (5, -2, 10), not half a height along the box's own -Y axis.
+    cam = _camera_20_units_back(sample_render_vars)
+    pitch_about_x = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]], dtype=np.float64)
+    upright = _kitti_car_row(_car_box_pose(cam, np.eye(3)))
+    tilted = _kitti_car_row(_car_box_pose(cam, pitch_about_x))
+    half_height = float(upright[8]) / 2
+    assert [float(v) for v in tilted[8:11]] == [float(v) for v in upright[8:11]]
+    for row in (upright, tilted):
+        x, y, z = (float(v) for v in row[11:14])
+        assert math.isclose(x, 5.0, abs_tol=1e-4)
+        assert math.isclose(y, -2.0 + half_height, abs_tol=1e-4)
+        assert math.isclose(z, 10.0, abs_tol=1e-4)
+
+
+def test_kitti_writer_dimensions_include_object_scale(sample_render_vars) -> None:
+    # The car's half-extent is (1, 1, 2); the box transform scales its axes by
+    # (2, 3, 4), so the world half-extent is (2, 3, 8).
+    cam = _camera_20_units_back(sample_render_vars)
+    scaled = _kitti_car_row(_car_box_pose(cam, np.diag([2.0, 3.0, 4.0])))
+    h, w, length = (float(v) for v in scaled[8:11])
+    assert (h, w, length) == (6.0, 4.0, 16.0)
+    # The bottom centre sits half the scaled height below the centre: -2 + 3.
+    x, y, z = (float(v) for v in scaled[11:14])
+    assert math.isclose(y, 1.0, abs_tol=1e-4)
+    assert (x, z) == (5.0, 10.0)
+
+
 def test_kitti_writer_label_uses_resolved_class_names(sample_render_vars) -> None:
     backend = MockBackend()
     KITTIWriter().write_frame(0, sample_render_vars, backend)
@@ -1473,6 +1576,11 @@ def test_bop_writer_finalize_writes_scene_json(sample_render_vars) -> None:
     assert f"{sd}/scene_camera.json" in backend.written
     assert f"{sd}/scene_gt.json" in backend.written
     assert f"{sd}/scene_gt_info.json" in backend.written
+    assert json.loads(backend.written[f"{sd}/mask_layout.json"]) == {
+        "mask_suffix": "gt_index"
+    }
+    # The marker is written last, after every scene document.
+    assert list(backend.written)[-1] == f"{sd}/mask_layout.json"
 
 
 def test_bop_writer_scene_camera_has_cam_K(sample_render_vars) -> None:
@@ -1506,7 +1614,97 @@ def test_bop_writer_object_id_map(sample_render_vars) -> None:
     gt = json.loads(backend.written[f"{sd}/scene_gt.json"])
     obj_ids = {entry["obj_id"] for entry in gt["0"]}
     assert obj_ids == {42, 7}
-    assert any(f"{sd}/mask/000000_000042.png" == k for k in backend.written)
+    assert f"{sd}/mask/000000_000000.png" in backend.written
+    assert f"{sd}/mask/000000_000001.png" in backend.written
+
+
+@pytest.mark.unit
+def test_bop_converts_centimetre_poses_without_rescaling_metre_depth(
+    sample_render_vars,
+):
+    sample_render_vars["CameraParams"]["meters_per_scene_unit"] = 0.01
+    sample_render_vars["CameraParams"]["view_transform"][0, 3, :3] = [2, 0, 0]
+    sample_render_vars["SemanticBoundingBox3D"]["transform"][0, 3, :3] = [0, 0, -20]
+    sample_render_vars["DistanceToCameraSD"].fill(0.2)
+    backend = MockBackend()
+    writer = BOPWriter()
+    writer.write_frame(0, sample_render_vars, backend)
+    writer.finalize(backend)
+    camera = json.loads(backend.read("000000/scene_camera.json"))["0"]
+    pose = json.loads(backend.read("000000/scene_gt.json"))["0"][0]
+    np.testing.assert_allclose(camera["cam_t_w2c"], [20, 0, 0])
+    np.testing.assert_allclose(pose["cam_t_m2c"], [20, 0, 200])
+    np.testing.assert_array_equal(backend.written["000000/depth/000000.png"][0], 200)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf")])
+def test_bop_rejects_an_invalid_scene_unit(sample_render_vars, scale):
+    sample_render_vars["CameraParams"]["meters_per_scene_unit"] = scale
+    with pytest.raises(ValueError, match="finite and positive"):
+        BOPWriter().write_frame(0, sample_render_vars, MockBackend())
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("writer_type", "config", "paths"),
+    [
+        (COCOWriter, COCOWriterConfig(), ["annotations/instances_train.json"]),
+        (
+            COCOWriter,
+            COCOWriterConfig(include_panoptic=True),
+            ["annotations/instances_train.json", "annotations/panoptic_train.json"],
+        ),
+        (
+            BOPWriter,
+            BOPWriterConfig(),
+            [
+                "000000/scene_camera.json",
+                "000000/scene_gt.json",
+                "000000/scene_gt_info.json",
+                "000000/mask_layout.json",
+            ],
+        ),
+        (YOLOWriter, YOLOWriterConfig(), ["data.yaml"]),
+    ],
+)
+def test_finalize_retries_missing_files_without_overwriting_completed_files(
+    tmp_path, sample_render_vars, monkeypatch, writer_type, config, paths
+):
+    reference = MockBackend()
+    baseline = writer_type(config)
+    baseline.write_frame(0, sample_render_vars, reference)
+    baseline.finalize(reference)
+    for fail_index, failed_path in enumerate(paths):
+        backend = DiskBackend(DiskBackendConfig(tmp_path / str(fail_index)))
+        writer = writer_type(config)
+        writer.write_frame(0, sample_render_vars, backend)
+        write = backend.write
+        attempts = []
+        failed = False
+
+        def fail_once(path, data):
+            nonlocal failed
+            attempts.append(path)
+            if path == failed_path and not failed:
+                failed = True
+                raise OSError("injected storage failure")
+            write(path, data)
+
+        monkeypatch.setattr(backend, "write", fail_once)
+        with pytest.raises(OSError, match="injected storage failure"):
+            writer.finalize(backend)
+        assert not backend.exists(paths[-1])
+        with pytest.raises(ValueError, match="finalization has started"):
+            writer.write_frame(1, sample_render_vars, backend)
+        writer.finalize(backend)
+        assert attempts == paths[: fail_index + 1] + paths[fail_index:]
+        for path in paths:
+            assert backend.read(path) == reference.read(path)
+        writer.finalize(backend)
+        assert attempts == paths[: fail_index + 1] + paths[fail_index:]
+        with pytest.raises(ValueError, match="finalization has started"):
+            writer.write_frame(1, sample_render_vars, backend)
 
 
 def test_bop_writer_finalize_idempotent(sample_render_vars) -> None:
@@ -1525,6 +1723,58 @@ def test_bop_writer_custom_scene_id(sample_render_vars) -> None:
     writer.write_frame(0, sample_render_vars, backend)
     writer.finalize(backend)
     assert any("000005/" in k for k in backend.written)
+
+
+def test_bop_writer_poses_are_in_opencv_camera_frame(sample_render_vars) -> None:
+    backend = MockBackend()
+    writer = BOPWriter()
+    writer.write_frame(0, _camera_20_units_back(sample_render_vars), backend)
+    writer.finalize(backend)
+    scene = {
+        name: json.loads(backend.written[f"000000/{name}.json"])
+        for name in ("scene_camera", "scene_gt")
+    }
+    flip = [1, 0, 0, 0, -1, 0, 0, 0, -1]
+    camera = scene["scene_camera"]["0"]
+    np.testing.assert_allclose(camera["cam_R_w2c"], flip)
+    np.testing.assert_allclose(camera["cam_t_w2c"], [0, 0, 20000], atol=1e-3)
+    first = scene["scene_gt"]["0"][0]
+    np.testing.assert_allclose(first["cam_R_m2c"], flip)
+    np.testing.assert_allclose(first["cam_t_m2c"], [5000, -2000, 10000], atol=1e-3)
+
+
+def test_bop_writer_cam_r_m2c_is_a_rotation_for_a_scaled_object(
+    sample_render_vars,
+) -> None:
+    # The box transform carries object scale; BOP needs a proper rotation.
+    angle = math.pi / 2
+    c, s = math.cos(angle), math.sin(angle)
+    yaw = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    scaled = yaw @ np.diag([2.0, 3.0, 4.0])  # scale each object axis
+    backend = MockBackend()
+    writer = BOPWriter()
+    writer.write_frame(
+        0, _car_box_pose(_camera_20_units_back(sample_render_vars), scaled), backend
+    )
+    writer.finalize(backend)
+    scene_gt = json.loads(backend.written["000000/scene_gt.json"])
+    rot = np.array(scene_gt["0"][0]["cam_R_m2c"]).reshape(3, 3)
+    np.testing.assert_allclose(rot @ rot.T, np.eye(3), atol=1e-6)
+    np.testing.assert_allclose(rot, np.diag([1.0, -1.0, -1.0]) @ yaw, atol=1e-6)
+    np.testing.assert_allclose(
+        scene_gt["0"][0]["cam_t_m2c"], [5000, -2000, 10000], atol=1e-3
+    )
+
+
+def test_bop_writer_refuses_a_zero_length_box_axis(sample_render_vars) -> None:
+    degenerate = _car_box_pose(
+        _camera_20_units_back(sample_render_vars), np.diag([1.0, 0.0, 1.0])
+    )
+    backend = MockBackend()
+    with pytest.raises(ValueError, match="zero-length box axis"):
+        BOPWriter().write_frame(0, degenerate, backend)
+    # Refused before any file for the object is written.
+    assert not any("mask" in key for key in backend.written)
 
 
 # ---------------------------------------------------------------------------

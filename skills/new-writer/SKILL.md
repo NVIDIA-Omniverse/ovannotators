@@ -11,15 +11,13 @@ description: >
   "implement VOC/Pascal format", "create a writer for X dataset", "export
   annotations as Y".
 license: Apache-2.0
-version: "0.1.1"
-author: NVIDIA ovannotators
-tags:
-  - ovannotators
-  - writers
-  - datasets
-tools:
-  - Read
-  - Grep
+metadata:
+  author: NVIDIA ovannotators
+  version: "0.1.1"
+  tags:
+    - ovannotators
+    - writers
+    - datasets
 ---
 
 # Creating a New Writer
@@ -43,15 +41,12 @@ coding:
 - **Prompt** — use the description directly; ask only if a load-bearing detail
   (coordinate origin, normalization, split policy) is missing.
 
-Also gather, in this order (repository files and the snippets below first, then
-the user request, then broader context):
+Also gather:
 
 - The per-frame files and global files the target format expects.
 - Which render vars (AOVs) the format needs -> the writer's
   `required_render_vars` (see Key Types / Functions).
 - Naming/units conventions (e.g. normalized vs pixel bboxes, depth scale).
-
-Treat the referenced `> **Source:**` snippets as the API source of truth.
 
 ## Prerequisites
 
@@ -107,7 +102,7 @@ canonical-loader and consumer acceptance remain independent conformance fields.
    `__init__.py` (and the top-level `src/ovannotators/__init__.py` `__all__`)
    for the direct-import path. Add installable discovery through the
    `ovannotators.writers` or `ovannotators.profile_writers` entry-point group,
-   respectively (see Output Format).
+   respectively (see Registration).
 7. Add a CPU-only test next to the existing snippet tests, then run it. For a
    profile writer, also run the profile-writer snippet tests.
    > **Source:** `tests/docs/python/test_custom_writer.py` snippet `doc-writer-test`
@@ -152,25 +147,17 @@ payload in one file and dispatch through the registry:
 
 > **Source:** `tests/docs/python/test_config_serialization.py` snippet `doc-config-registry`
 
-## Output Format
+## Registration
 
-- For explanations: cite the relevant API names, the source snippet(s), and the
-  resulting output-file tree.
-- For code changes: summarize the module added, the exports/entry-point wired,
-  the docs section, and the test run.
-
-Entry-point registration (small inline fragment) makes the writer auto-register
-on install without an explicit import:
+Importing `ovannotators.writers` or `ovannotators.profile_writers` loads the
+matching entry-point group, so an installed writer registers without an
+explicit import:
 
 ```toml
 # pyproject.toml
 [project.entry-points."ovannotators.writers"]
-my_format = "ovannotators.writers.my_format:MyFormatWriter"
+my_format = "my_package.writers:MyFormatWriter"
 ```
-
-## Scripts
-
-This skill has no scripts.
 
 ## Key Types / Functions
 
@@ -199,12 +186,11 @@ Common render-var (AOV) keys passed in `render_vars`:
 
 ## Limitations
 
-- The referenced snippets remain the source of truth; add or update a tested
-  snippet before documenting new API usage.
+- Add or update a tested snippet before documenting new API usage.
 - Snippet tests are CPU-only — full ovrtx render-driven validation runs under
   the GPU-marked suite, not here.
 
-## Troubleshooting
+## Rules
 
 - Call `validate_required_vars(...)` at the **top** of `write_frame`; do not
   hand-roll the missing-var check.
@@ -217,12 +203,7 @@ Common render-var (AOV) keys passed in `render_vars`:
   straight to `backend.write_array`, but convert with `_to_numpy` before JSON,
   structured-array indexing, or `.tolist()`.
 - For image vars, pass the array to `backend.write_array(..., encoding="png"|"jpg")`
-  **unchanged** — do not force it to host NumPy yourself. The backend encodes via
-  `get_image_codec()`, which uses GPU nvImageCodec (the `[gpu]` extra) when a CUDA
-  device is present — several× faster, and zero-copy when the frame is already
-  GPU-resident — and falls back to Pillow otherwise. Forcing a host copy defeats
-  the zero-copy path. Tell users to install `[gpu]` on GPU hosts for faster image
-  I/O.
+  unchanged; a host copy defeats the GPU encode path.
 - Backend writes are synchronous; `BackendWriteError` propagates to the caller.
 
 ## References
@@ -231,8 +212,6 @@ Common render-var (AOV) keys passed in `render_vars`:
 - Backend protocol: `src/ovannotators/backends/_base.py`
 - Built-in writers: `src/ovannotators/writers/`
 - Companion skill for storage destinations: `skills/new-backend/SKILL.md`
-- Keep skills, snippets, and `docs/public/api.rst` synchronized when the API
-  changes.
 
 ## WebDataset packaging composition
 
@@ -245,6 +224,11 @@ by exact writer type, and `adapter=` selects others. Existing writer and
 backend contracts are unchanged.
 
 > **Source:** `tests/docs/python/test_webdataset.py` snippet `doc-webdataset-capture`
+
+For finalized native output on local disk, `export_finalized_dataset(writer,
+episodes, packager)` applies the same adapter to one directory per episode and
+leaves the sources unchanged. A custom writer must pass its adapter again with
+`adapter=`; without it the call raises `ConfigurationError`.
 
 For a custom writer, subclass the experimental `CaptureAdapter` and pass it to
 `DatasetCapture` with `adapter=`. Define `sample_schema`, `create_writer` and

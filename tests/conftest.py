@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -66,6 +67,18 @@ requires_ovrtx = pytest.mark.skipif(
     not _OVRTX_AVAILABLE,
     reason="ovrtx not installed — skipping GPU render tests",
 )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # Output capture is suspended here, so fd 2 is still the terminal. Keep a
+    # duplicate for renderer-deadline tracebacks, which pytest would otherwise
+    # capture and discard when the watchdog ends the process.
+    from tests._ovstage_session import set_watchdog_stream
+
+    try:
+        set_watchdog_stream(os.dup(sys.stderr.fileno()))
+    except (AttributeError, OSError, ValueError):
+        pass  # No real stderr (e.g. replaced by a plugin): use sys.stderr.
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +131,7 @@ def _make_bbox3d_array() -> np.ndarray:
         arr[i]["x_min"], arr[i]["y_min"], arr[i]["z_min"] = lo
         arr[i]["x_max"], arr[i]["y_max"], arr[i]["z_max"] = hi
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = translate
+        transform[3, :3] = translate
         arr[i]["transform"] = transform
     return arr
 
@@ -226,17 +239,10 @@ def _own_extracted(extracted: object, decoder: object) -> object:
     return np.array(array, copy=True)
 
 
-@pytest.fixture(scope="session")
-def rendered_scene_vars() -> dict:
-    """Render ``test_scene.usda`` once and return all extracted render vars.
+def render_scene_vars(usda: str, session_name: str) -> dict:
+    """Render ``usda`` frame 0 of ``AllAnnotators`` and return its extracted vars.
 
-    Renders frame 0 of the ``AllAnnotators`` RenderProduct (which requests every
-    ovrtx AOV) and extracts each var to a CPU numpy array via
-    :class:`OvrtxOutput`.  Raw annotator byte payloads (bounding boxes, camera
-    params) are decoded into the structured arrays the writers consume; the
-    ``SemanticIdMap`` buffer is left raw for label resolution.
-
-    Skipped when ovrtx is unavailable.
+    Skipped when ovrtx is unavailable. See :func:`rendered_scene_vars`.
     """
     if not _OVRTX_AVAILABLE:
         pytest.skip("ovrtx not installed — skipping GPU render tests")
@@ -244,8 +250,7 @@ def rendered_scene_vars() -> dict:
     from ovannotators.renderer_outputs.ovrtx import OvrtxOutput
     from tests._ovstage_session import OvstageSession
 
-    usda = TEST_SCENE_USDA.read_text()
-    session = OvstageSession("rendered-scene-vars")
+    session = OvstageSession(session_name)
     try:
         session.open_usd_from_string(usda)
 
@@ -287,6 +292,21 @@ def rendered_scene_vars() -> dict:
         # above, so there are no live mappings to leak.
         session.close()
     return render_vars
+
+
+@pytest.fixture(scope="session")
+def rendered_scene_vars() -> dict:
+    """Render ``test_scene.usda`` once and return all extracted render vars.
+
+    Renders frame 0 of the ``AllAnnotators`` RenderProduct (which requests every
+    ovrtx AOV) and extracts each var to a CPU numpy array via
+    :class:`OvrtxOutput`.  Raw annotator byte payloads (bounding boxes, camera
+    params) are decoded into the structured arrays the writers consume; the
+    ``SemanticIdMap`` buffer is left raw for label resolution.
+
+    Skipped when ovrtx is unavailable.
+    """
+    return render_scene_vars(TEST_SCENE_USDA.read_text(), "rendered-scene-vars")
 
 
 @pytest.fixture

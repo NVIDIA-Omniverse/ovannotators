@@ -24,6 +24,7 @@ ovrtx mapping), this exercises the real ovrtx producer path.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -32,10 +33,13 @@ from ovannotators._internal.optional_deps import ovrtx_available
 
 _OVRTX_AVAILABLE = ovrtx_available()
 
-pytestmark = pytest.mark.skipif(
-    not _OVRTX_AVAILABLE,
-    reason="ovrtx not installed — skipping GPU sensor extraction test",
-)
+pytestmark = [
+    pytest.mark.gpu,
+    pytest.mark.skipif(
+        not _OVRTX_AVAILABLE,
+        reason="ovrtx not installed — skipping GPU sensor extraction test",
+    ),
+]
 
 LIDAR_SCENE = Path(__file__).parent / "data" / "lidar_scene.usda"
 LIDAR_PRODUCT = "/World/Render/Products/LidarProduct"
@@ -45,10 +49,14 @@ EXPECTED_CHANNELS = {"Coordinates", "Intensity", "Counts", "TimeOffsetNs"}
 
 
 @pytest.fixture(scope="module")
-def lidar_pointcloud() -> dict:
+def lidar_pointcloud() -> Iterator[dict]:
     """Render the lidar scene once and extract the ``PointCloud`` render var.
 
-    Returns:
+    The extracted Warp arrays are zero-copy views that keep their ovrtx mapping
+    alive, so teardown drops them before closing the session. pytest keeps the
+    yielded dict until teardown finishes, so it is cleared rather than deleted.
+
+    Yields:
         The value returned by :meth:`OvrtxOutput.extract` for ``PointCloud``.
     """
     import ovrtx
@@ -62,15 +70,24 @@ def lidar_pointcloud() -> dict:
         "lidar-pointcloud",
         ovrtx.RendererConfig(motion_bvh=ovrtx.MotionBvh.ENABLE),
     )
-    session.open_usd(LIDAR_SCENE)
+    result: dict = {}
+    products = frame = None
+    try:
+        session.open_usd(LIDAR_SCENE)
 
-    # Warm up the sensor before reading the point cloud frame.
-    for _ in range(WARMUP_STEPS):
-        session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
+        # Warm up the sensor before reading the point cloud frame.
+        for _ in range(WARMUP_STEPS):
+            session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
 
-    products = session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
-    frame = products[LIDAR_PRODUCT].frames[0]
-    return OvrtxOutput().extract(frame, "PointCloud")
+        products = session.step({LIDAR_PRODUCT}, STEP_DT_SECONDS)
+        frame = products[LIDAR_PRODUCT].frames[0]
+        result.update(OvrtxOutput().extract(frame, "PointCloud"))
+        frame = products = None
+        yield result
+    finally:
+        frame = products = None
+        result.clear()
+        session.close()
 
 
 def test_pointcloud_returns_nested_tensors_and_params(lidar_pointcloud: dict) -> None:

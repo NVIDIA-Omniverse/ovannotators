@@ -69,7 +69,7 @@ Install and run:
 
 ```bash
 uv sync --extra dev --extra-index-url https://pypi.nvidia.com/ --index-strategy unsafe-best-match
-uv pip install "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3"
+uv pip install "ovrtx>=0.5,<0.8" "ovstage>=0.2,<0.5"
 uv run python examples/requirements_capture.py --writer coco --profile instance_segmentation
 ```
 

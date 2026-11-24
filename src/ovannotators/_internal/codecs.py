@@ -608,18 +608,25 @@ class NvVideoEncoder:
         codec: VideoCodec = "h264",
         lossless: bool = False,
         preset: VideoPreset | None = None,
+        gop: int | None = None,
     ) -> None:
         """Initialize an unopened encoder.
 
         Call :meth:`open` before :meth:`write_frame`.
 
         Args:
-            codec: H.264 or HEVC.
+            codec: H.264, HEVC, or AV1.
             lossless: Preserve normalized RGB8 exactly; requires HEVC.
             preset: Optional NVENC speed/compression preset; lossless defaults to P5.
+            gop: Optional keyframe (IDR) interval in frames.
         """
-        validate_video_options(codec, lossless, preset)
-        self._codec, self._lossless, self._preset = codec, lossless, preset
+        validate_video_options(codec, lossless, preset, gop=gop)
+        self._codec, self._lossless, self._preset, self._gop = (
+            codec,
+            lossless,
+            preset,
+            gop,
+        )
         self._encoder = None
         self._opened = False
         self._device = None
@@ -680,7 +687,11 @@ class NvVideoEncoder:
         # The in-process muxer requires packets in display order.
         # NVENC takes an integer rate for rate control only; the MP4 container
         # carries the exact (possibly fractional) frame timing.
-        options = dict(codec=self._codec, fps=str(max(1, round(self._fps))), bf=0)
+        options: dict[str, Any] = dict(
+            codec=self._codec, fps=str(max(1, round(self._fps))), bf=0
+        )
+        if self._gop is not None:
+            options["gop"] = self._gop
         if self._preset is not None:
             options["preset"] = self._preset
         if self._lossless:
@@ -871,14 +882,23 @@ class NvVideoEncoder:
             raise RuntimeError("NVENC produced no data for lossless video frames")
         if not payload:
             return payload
-        # NVENC emits a raw Annex-B elementary stream, which is not a
-        # playable container. Mux it into MP4 in-process (no FFmpeg/PyAV) so
-        # the written ``.mp4`` files are valid for standard players.
-        from ovannotators._internal.mp4_mux import mux_h264_annexb, mux_hevc_annexb
+        # NVENC emits a raw elementary stream (Annex-B for H.264/HEVC, OBU/IVF
+        # for AV1), which is not a playable container. Mux it into MP4
+        # in-process (no FFmpeg/PyAV) so the written ``.mp4`` files are valid
+        # for standard players and training loaders.
+        from ovannotators._internal.mp4_mux import (
+            mux_av1_obu,
+            mux_h264_annexb,
+            mux_hevc_annexb,
+        )
 
         if self._codec == "hevc":
             return mux_hevc_annexb(
                 payload, self._fps, self._width, self._height, rgb=self._lossless
+            )
+        if self._codec == "av1":
+            return mux_av1_obu(
+                payload, fps=self._fps, width=self._width, height=self._height
             )
 
         return mux_h264_annexb(
@@ -941,6 +961,7 @@ def get_video_encoder(
     codec: VideoCodec = "h264",
     lossless: bool = False,
     preset: VideoPreset | None = None,
+    gop: int | None = None,
 ) -> VideoEncoder:
     """Create and open a GPU video encoder.
 
@@ -950,9 +971,11 @@ def get_video_encoder(
             supported.
         w (int): Output width in pixels.
         h (int): Output height in pixels.
-        codec: H.264 (default) or HEVC. HEVC requires NVENC, without CPU fallback.
+        codec: H.264 (default), HEVC, or AV1. All codecs require NVENC without
+            CPU fallback; AV1 requires Ada Lovelace or newer hardware.
         lossless: Preserve normalized RGB8 exactly; requires HEVC.
         preset: Explicit NVENC speed/compression preset.
+        gop: Optional keyframe (IDR) interval in frames.
 
     Returns:
         VideoEncoder: An opened :class:`NvVideoEncoder` ready for
@@ -961,7 +984,7 @@ def get_video_encoder(
     Raises:
         ImportError: If ``PyNvVideoCodec`` is not installed.
     """
-    validate_video_options(codec, lossless, preset)
+    validate_video_options(codec, lossless, preset, gop=gop)
     try:
         import PyNvVideoCodec  # noqa: F401
     except ImportError as e:
@@ -969,6 +992,8 @@ def get_video_encoder(
             "PyNvVideoCodec is required for video encoding. "
             "Install it with: pip install PyNvVideoCodec"
         ) from e
-    enc: VideoEncoder = NvVideoEncoder(codec=codec, lossless=lossless, preset=preset)
+    enc: VideoEncoder = NvVideoEncoder(
+        codec=codec, lossless=lossless, preset=preset, gop=gop
+    )
     enc.open(path, fps, w, h)
     return enc

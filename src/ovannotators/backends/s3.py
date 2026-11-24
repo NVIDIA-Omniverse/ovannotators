@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import io
 from dataclasses import dataclass
 from typing import Any, ClassVar
@@ -165,6 +166,48 @@ class S3Backend:
                 )
         except Exception as exc:
             raise BackendWriteError(path=path, message=str(exc)) from exc
+
+    def write_if_absent(self, path: str, data: bytes) -> bool:
+        """Atomically create an object, returning false if the key already exists."""
+        try:
+            target = {"Bucket": self._config.bucket, "Key": self._key(path)}
+            if len(data) <= _MAX_SINGLE_PUT_BYTES:
+                self._client.put_object(**target, Body=data, IfNoneMatch="*")
+            else:
+                self._upload_if_absent(target, data)
+        except botocore.exceptions.ClientError as exc:
+            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 412:
+                return False
+            raise BackendWriteError(path=path, message=str(exc)) from exc
+        except Exception as exc:
+            raise BackendWriteError(path=path, message=str(exc)) from exc
+        return True
+
+    def _upload_if_absent(self, target: dict[str, str], data: bytes) -> None:
+        upload_id = self._client.create_multipart_upload(**target)["UploadId"]
+        part_size = max(
+            self._transfer_config.multipart_chunksize, (len(data) + 9999) // 10000
+        )
+        parts = []
+        try:
+            for number, start in enumerate(range(0, len(data), part_size), start=1):
+                part = self._client.upload_part(
+                    **target,
+                    UploadId=upload_id,
+                    PartNumber=number,
+                    Body=data[start : start + part_size],
+                )
+                parts.append({"PartNumber": number, "ETag": part["ETag"]})
+            self._client.complete_multipart_upload(
+                **target,
+                UploadId=upload_id,
+                MultipartUpload={"Parts": parts},
+                IfNoneMatch="*",
+            )
+        except BaseException:
+            with contextlib.suppress(Exception):
+                self._client.abort_multipart_upload(**target, UploadId=upload_id)
+            raise
 
     def write_array(
         self,

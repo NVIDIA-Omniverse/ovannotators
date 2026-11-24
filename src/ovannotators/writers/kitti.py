@@ -30,7 +30,9 @@ from ovannotators.writers._helpers import (
     id_label_map_from_render_vars,
     iter_bboxes_2d,
     iter_bboxes_3d,
+    rotation_and_scale,
     validate_required_vars,
+    world_to_opencv_camera,
 )
 from ovannotators.writers._registry import WriterRegistry
 
@@ -183,6 +185,8 @@ class KITTIWriter:
         # Match 3D boxes to 2D boxes by instance_id
         bbox_3d_by_iid: dict[int, BBox3D] = {b.instance_id: b for b in bboxes_3d}
 
+        r_w2c, t_w2c = world_to_opencv_camera(cam)
+
         lines: list[str] = []
         classes_filter = set(self.config.classes) if self.config.classes else None
         for bb2 in bboxes_2d:
@@ -204,18 +208,28 @@ class KITTIWriter:
             bottom = bb2.y_max
 
             if bb3 is not None:
-                center = bb3.center
-                extent = bb3.extent
-                rot = bb3.rotation
+                # The box transform carries object scale in its axis columns and
+                # ``extent`` is the unscaled object-space half-extent, so the
+                # world-space half-extent is their product.
+                unit_rotation, axis_scale = rotation_and_scale(bb3.rotation)
+                extent = bb3.extent * axis_scale
+                rot = r_w2c @ unit_rotation
+                center = r_w2c @ bb3.center + t_w2c
                 h_3d = float(2.0 * extent[1])
                 w_3d = float(2.0 * extent[0])
                 l_3d = float(2.0 * extent[2])
-                # KITTI: location is bottom-centre (y += half-height, Y-down)
+                # KITTI labels store yaw only: the devkit rebuilds every box
+                # upright, extending height h up the camera's -Y axis from
+                # ``location``. Place the location half a height straight down
+                # the camera's +Y axis so the rebuilt box keeps the true centre;
+                # a tilted box's pitch and roll cannot be represented.
                 x_3d = float(center[0])
                 y_3d = float(center[1] + extent[1])
                 z_3d = float(center[2])
-                # rotation about Y-axis from rotation matrix
-                rotation_y = float(math.atan2(-rot[2, 0], rot[2, 2]))
+                # The length (``l_3d``) is the box's local Z axis, which KITTI
+                # places along +X at rotation_y == 0; its camera-frame direction
+                # is (cos ry, 0, -sin ry), so yaw comes from the Z column.
+                rotation_y = float(math.atan2(-rot[2, 2], rot[0, 2]))
                 alpha = rotation_y - math.atan2(x_3d, z_3d)
                 alpha = (alpha + math.pi) % (2 * math.pi) - math.pi
             else:

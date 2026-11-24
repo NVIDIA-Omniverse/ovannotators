@@ -7,10 +7,26 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ovannotators"
-version = "0.2.0"
+version = "0.3.0"
 description = "Ground-truth annotation library for Isaac Sim / OmniVerse renderers"
+readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE-3rdparty.txt"]
+authors = [{name = "NVIDIA Corporation"}]
+keywords = ["omniverse", "isaac-sim", "synthetic-data", "dataset", "annotation", "ground-truth"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "numpy",
     # Pillow ships breaking removals in each yearly major; test and lift the
@@ -20,10 +36,17 @@ dependencies = [
     "warp-lang",
 ]
 
+[project.urls]
+Documentation = "https://nvidia-omniverse.github.io/ovannotators/"
+Repository = "https://github.com/NVIDIA-Omniverse/ovannotators"
+Changelog = "https://github.com/NVIDIA-Omniverse/ovannotators/blob/main/CHANGELOG.md"
+
 [project.optional-dependencies]
 # --- Individual feature extras (CPU-installable, no GPU required) ---
 s3 = [
-    "boto3",
+    # 1.35.2 is the first release whose S3 models accept IfNoneMatch on
+    # PutObject and CompleteMultipartUpload (write_if_absent).
+    "boto3>=1.35.2",
 ]
 ovstorage = [
     # Pre-1.0 SDK: 0.4 replaces the paginated list API the adapter uses.
@@ -46,7 +69,7 @@ gpu = [
     "nvidia-nvimgcodec-cu12",
 ]
 video = [
-    "PyNvVideoCodec",
+    "PyNvVideoCodec>=2,<3",
 ]
 # --- Aggregate runtime extras ---
 # CPU-installable feature set: everything that works without a GPU.
@@ -70,6 +93,7 @@ all = [
 test = [
     "pytest",
     "pytest-cov",
+    "pytest-xdist",
     "pytest-benchmark",
     "pyyaml",
     "webdataset==1.0.2",
@@ -83,11 +107,6 @@ dev-cpu = [
     # and CI disagree and turns the lint job red on commits that changed
     # nothing. Bump this, the lock, and .github/workflows/ci.yml together.
     "ruff==0.15.16",
-    "sphinx",
-    "nvidia-sphinx-theme",
-    "sphinx-copybutton",
-    "sphinx-design",
-    "myst-parser",
     "ovannotators[all-cpu,test]",
 ]
 # Full local dev environment: CPU dev tooling + GPU runtime + ovrtx renderer.
@@ -95,11 +114,25 @@ dev-cpu = [
 # points (open_usd, update_from_usd_time, ...) are deprecated in favour of
 # ovstage.population + Renderer.attach_ovstage().
 # ovrtx and ovstage must come from the same release train -- 0.5 pairs with
-# ovstage 0.2, and mixing them mixes their bundled OpenUSD runtimes.
+# ovstage 0.2, 0.6 with 0.3 and 0.7 with 0.4 -- and mixing them mixes their
+# bundled OpenUSD runtimes. All three trains are supported; a renderer-facing
+# change needs a GPU run on each.
 dev = [
     "ovannotators[dev-cpu,gpu,video]",
-    "ovrtx>=0.5,<0.6",
-    "ovstage>=0.2,<0.3",
+    "ovrtx>=0.5,<0.8",
+    "ovstage>=0.2,<0.5",
+]
+
+# Documentation toolchain. A dependency group, not an extra, so it is locked in
+# uv.lock but not published in the wheel metadata. Install it with
+# `uv sync --group docs`.
+[dependency-groups]
+docs = [
+    "sphinx",
+    "nvidia-sphinx-theme",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "myst-parser",
 ]
 
 [project.entry-points."ovannotators.renderer_outputs"]
@@ -112,11 +145,16 @@ kitti = "ovannotators.writers.kitti:KITTIWriter"
 yolo = "ovannotators.writers.yolo:YOLOWriter"
 openlabel = "ovannotators.writers.openlabel:OpenLABELWriter"
 bop = "ovannotators.writers.bop:BOPWriter"
+dope = "ovannotators.writers.dope:DOPEWriter"
+centerpose = "ovannotators.writers.centerpose:CenterPoseWriter"
+ycb_video = "ovannotators.writers.ycb_video:YCBVideoWriter"
 lerobot = "ovannotators.writers.lerobot:LeRobotWriter"
 cosmos_transfer = "ovannotators.writers.cosmos_transfer:CosmosTransferWriter"
 
 [project.entry-points."ovannotators.profile_writers"]
 cosmos_multiview = "ovannotators.profile_writers.cosmos_multiview:CosmosMultiviewWriter"
+lerobot_lance = "ovannotators.profile_writers.lerobot_lance:LeRobotLanceWriter"
+lerobot_v3 = "ovannotators.profile_writers.lerobot_v3:LeRobotV3Writer"
 groot_lerobot_v2 = "ovannotators.profile_writers.groot_lerobot_v2:GrootLeRobotV2Writer"
 umi_replay_buffer = "ovannotators.profile_writers.umi_replay_buffer:UMIReplayBufferWriter"
 
@@ -127,6 +165,12 @@ ovstorage = "ovannotators.backends.ovstorage:OvstorageBackend"
 
 [tool.uv]
 managed = true
+
+# Docs are built on Python 3.12, so the docs group is resolved only there. On
+# older Pythons the lock would need Soup Sieve 2.x, which has unfixed advisories
+# (CVE-2026-126190, CVE-2026-126191).
+[tool.uv.dependency-groups]
+docs = { requires-python = ">=3.12" }
 
 [tool.ruff.lint]
 extend-select = [
@@ -168,7 +212,7 @@ include = [
 # Benchmarks and GPU tests are skipped by default in regular test runs. Emit
 # JUnit XML for OV-PLC result analysis/heatmaps and use strict marker checking
 # so taxonomy typos fail loudly.
-addopts = "--strict-markers --junitxml=_build/results.xml -p no:benchmark --ignore=tests/benchmarks -m 'not gpu and not flaky and not experimental'"
+addopts = "--strict-markers --junitxml=_build/results.xml -p no:benchmark --ignore=tests/benchmarks -m 'not gpu and not flaky and not experimental and not conformance'"
 testpaths = ["tests"]
 markers = [
     # --- type axis ---
@@ -182,6 +226,7 @@ markers = [
     "gpu: full pipeline tests requiring GPU + ovrtx (run locally, skipped on CI)",
     "multi_gpu: requires more than one GPU",
     "network: requires network / external services",
+    "conformance: decodes output with pinned upstream loaders; needs the isolated conformance env",
     # --- duration axis ---
     "duration: duration axis marker (defaults to duration_1s)",
     "duration_1s: 1-9 seconds (default)",

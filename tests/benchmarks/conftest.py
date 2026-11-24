@@ -130,7 +130,7 @@ def bbox_3d_data(bbox_2d_data) -> np.ndarray:
         data[i]["x_min"], data[i]["y_min"], data[i]["z_min"] = -ext
         data[i]["x_max"], data[i]["y_max"], data[i]["z_max"] = ext
         transform = np.eye(4, dtype=np.float32)
-        transform[:3, 3] = rng.uniform(-5, 5, 3).astype(np.float32)
+        transform[3, :3] = rng.uniform(-5, 5, 3).astype(np.float32)
         data[i]["transform"] = transform
     return data
 

@@ -31,14 +31,97 @@ here rather than repeated at every call site:
   standalone mode, so attaching a stage forces every step call to change too.
 * ovrtx's USD schema families must be registered before ovstage's first
   population, and from ovrtx 0.5 importing ``ovrtx`` no longer does that.
+
+Every renderer call made through :class:`OvstageSession` runs under
+:func:`renderer_deadline`, so a stall in ovrtx or ovstage ends the process with
+a traceback instead of hanging the test run.
 """
 
 from __future__ import annotations
 
+import faulthandler
 import gc
+import math
+import os
+import sys
 import warnings
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import Any, Self
+
+RENDERER_TIMEOUT_ENV = "OVANNOTATORS_TEST_RENDERER_TIMEOUT_S"
+DEFAULT_RENDERER_TIMEOUT_S = 300.0
+
+# Uncaptured stderr for watchdog tracebacks; see set_watchdog_stream().
+_watchdog_fd: int | None = None
+# True while a renderer_deadline() block is armed; nesting is rejected.
+_deadline_armed = False
+
+
+def set_watchdog_stream(fd: int) -> None:
+    """Send :func:`renderer_deadline` tracebacks to ``fd``.
+
+    pytest redirects file descriptor 2 while a test runs and discards the
+    captured output when the watchdog ends the process. ``tests/conftest.py``
+    passes a duplicate of the terminal's stderr, taken while capture is
+    suspended, so the traceback reaches the terminal.
+
+    Args:
+        fd: An open file descriptor that stays valid for the session.
+    """
+    global _watchdog_fd
+    _watchdog_fd = fd
+
+
+def renderer_timeout_s() -> float:
+    """Return the per-call renderer deadline in seconds.
+
+    Reads ``OVANNOTATORS_TEST_RENDERER_TIMEOUT_S``; defaults to 300 seconds.
+
+    Raises:
+        ValueError: If the variable is not a positive number.
+    """
+    raw = os.environ.get(RENDERER_TIMEOUT_ENV)
+    if raw is None:
+        return DEFAULT_RENDERER_TIMEOUT_S
+    try:
+        value = float(raw)
+    except ValueError:
+        value = math.nan
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(
+            f"{RENDERER_TIMEOUT_ENV} must be a finite positive number; got {raw!r}"
+        )
+    return value
+
+
+@contextmanager
+def renderer_deadline() -> Iterator[None]:
+    """Abort the process with a traceback if the block outlives the deadline.
+
+    A stalled native call (for example ``Renderer.attach_ovstage``) cannot be
+    interrupted from Python, and it may hold the GIL, so a Python timer could
+    never run. :func:`faulthandler.dump_traceback_later` fires from a C watchdog
+    thread: it writes every thread's stack and exits with status 1. Under
+    pytest-xdist the worker crash fails the running test and the run
+    continues. Only one such watchdog can be armed at a time, so nesting
+    raises, and this must not be combined with pytest's
+    ``faulthandler_timeout``.
+
+    Raises:
+        RuntimeError: If called while another deadline is armed.
+    """
+    global _deadline_armed
+    if _deadline_armed:
+        raise RuntimeError("renderer_deadline() does not nest")
+    stream = sys.stderr if _watchdog_fd is None else _watchdog_fd
+    faulthandler.dump_traceback_later(renderer_timeout_s(), exit=True, file=stream)
+    _deadline_armed = True
+    try:
+        yield
+    finally:
+        faulthandler.cancel_dump_traceback_later()
+        _deadline_armed = False
 
 
 def render_vars_by_source_name(frame: Any) -> dict[str, Any]:
@@ -121,11 +204,14 @@ class OvstageSession:
         # it explicitly rather than relying on a side effect of constructing
         # the Renderer.
         ovrtx.register_schema_paths()
-        # Order still matters: construct the Renderer *before* the Stage, as
-        # ovrtx's own ovstage examples do.
-        self.renderer = ovrtx.Renderer() if config is None else ovrtx.Renderer(config)
-        self.stage = ovstage.Stage(name)
-        self.renderer.attach_ovstage(self.stage)
+        with renderer_deadline():
+            # Order still matters: construct the Renderer *before* the Stage,
+            # as ovrtx's own ovstage examples do.
+            self.renderer = (
+                ovrtx.Renderer() if config is None else ovrtx.Renderer(config)
+            )
+            self.stage = ovstage.Stage(name)
+            self.renderer.attach_ovstage(self.stage)
         self.ordinal = 0
 
     def _publish(self, populate: Any) -> None:
@@ -135,10 +221,11 @@ class OvstageSession:
             populate: Callable taking the ordinal to publish at.
         """
         next_ordinal = self.ordinal + 1
-        populate(next_ordinal)
-        # The renderer only observes a publication once the write floor covers
-        # it; advance_write_floor clamps, so this is safe to call repeatedly.
-        self.stage.advance_write_floor(next_ordinal).wait()
+        with renderer_deadline():
+            populate(next_ordinal)
+            # The renderer only observes a publication once the write floor
+            # covers it; advance_write_floor clamps, so this is safe to repeat.
+            self.stage.advance_write_floor(next_ordinal).wait()
         self.ordinal = next_ordinal
 
     def open_usd(self, usd_path: str, time_code: float = 0.0) -> None:
@@ -152,7 +239,7 @@ class OvstageSession:
         """
         self._publish(
             lambda n: self._ovstage.population.open_usd(
-                self.stage, str(usd_path), ordinal=n, time_code=time_code
+                self.stage, str(usd_path), n, time_code
             )
         )
 
@@ -171,7 +258,7 @@ class OvstageSession:
         """
         self._publish(
             lambda n: self._ovstage.population.open_usd_from_string(
-                self.stage, usda, ordinal=n, time_code=time_code
+                self.stage, usda, n, time_code
             )
         )
 
@@ -197,11 +284,12 @@ class OvstageSession:
         Returns:
             The ovrtx ``RenderProductSetOutputs`` for this step.
         """
-        return self.renderer.step(
-            render_products=set(render_products),
-            delta_time=delta_time,
-            ordinal=self.ordinal,
-        )
+        with renderer_deadline():
+            return self.renderer.step(
+                render_products=set(render_products),
+                delta_time=delta_time,
+                ordinal=self.ordinal,
+            )
 
     def step_async(self, render_products: Iterable[str], delta_time: float) -> Any:
         """Enqueue a step against the latest committed publication.
@@ -231,26 +319,27 @@ class OvstageSession:
         # teardown ovrtx's own ovstage examples use. Leaving this to GC lets the
         # Stage outlive or predecease the renderer nondeterministically, which
         # can deadlock at interpreter shutdown.
-        for step in (
-            self.renderer.detach_ovstage,
-            self.stage.destroy,
-            self.renderer.destroy,
-        ):
-            try:
-                step()
-            except RuntimeError as exc:  # pragma: no cover - already torn down
-                # A renderer that never attached, or was already destroyed,
-                # raises here. Surface it rather than swallowing it silently:
-                # a real teardown failure otherwise shows up much later as a
-                # leaked-mapping warning or a hang at interpreter exit.
-                warnings.warn(
-                    f"ovstage teardown step {step.__name__} failed: {exc}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-        del self.renderer
-        del self.stage
-        gc.collect()
+        with renderer_deadline():
+            for step in (
+                self.renderer.detach_ovstage,
+                self.stage.destroy,
+                self.renderer.destroy,
+            ):
+                try:
+                    step()
+                except RuntimeError as exc:  # pragma: no cover - torn down
+                    # A renderer that never attached, or was already destroyed,
+                    # raises here. Surface it rather than swallowing it: a real
+                    # teardown failure otherwise shows up much later as a
+                    # leaked-mapping warning or a hang at interpreter exit.
+                    warnings.warn(
+                        f"ovstage teardown step {step.__name__} failed: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+            del self.renderer
+            del self.stage
+            gc.collect()
 
     def __enter__(self) -> Self:
         """Enter the context manager.

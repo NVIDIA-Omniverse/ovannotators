@@ -244,7 +244,7 @@ def main(argv=None):
 
         ordinal = 1
         ovstage.population.open_usd_from_string(
-            stage, render_product_layer(requested), ordinal=ordinal, time_code=0.0
+            stage, render_product_layer(requested), ordinal, 0.0
         )
         stage.advance_write_floor(ordinal).wait()
         capture(renderer, stage, ordinal, writer, backend, args.frames)

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -61,6 +62,24 @@ COSMOS_EXPECTED = GOLDEN_DIR / "cosmos_transfer_writer" / "expected"
 LEROBOT_EXPECTED = GOLDEN_DIR / "lerobot_writer" / "expected"
 
 UPDATE_GOLDEN = os.environ.get("UPDATE_GOLDEN", "0") == "1"
+
+
+def _ovrtx_minor() -> tuple[int, int] | None:
+    try:
+        major, minor = metadata.version("ovrtx").split(".")[:2]
+    except metadata.PackageNotFoundError:
+        return None
+    return int(major), int(minor)
+
+
+# The color goldens were rendered with ovrtx 0.7; ovrtx 0.5 renders the scene
+# visibly differently (MAE ~8 against limits of 2-5), while 0.6 stays within
+# tolerance. Skipping also keeps UPDATE_GOLDEN from overwriting them with 0.5
+# output.
+skip_on_ovrtx_05_color = pytest.mark.skipif(
+    _ovrtx_minor() == (0, 5),
+    reason="color goldens are rendered with ovrtx 0.7; ovrtx 0.5 renders differently",
+)
 
 
 def _read_json(path: Path):
@@ -241,6 +260,7 @@ class TestCOCOGolden:
         golden = json.loads(golden_path.read_text())
         _assert_coco_equal(result, golden)
 
+    @skip_on_ovrtx_05_color
     def test_image_file(self, coco_out) -> None:
         result_path = coco_out / "images" / "000000.jpg"
         golden_path = COCO_EXPECTED / "image_000000.jpg"
@@ -451,6 +471,7 @@ def lerobot_out(tmp_path_factory, rendered_scene_vars):
 
 
 class TestKITTIGolden:
+    @skip_on_ovrtx_05_color
     def test_image_file(self, kitti_out) -> None:
         result_path = kitti_out / "image_2" / "000000.png"
         golden_path = KITTI_EXPECTED / "image_2" / "000000.png"
@@ -523,6 +544,7 @@ class TestYOLOGolden:
         assert golden.exists(), f"Golden missing: {golden}. Run UPDATE_GOLDEN=1 pytest."
         assert result == golden.read_text()
 
+    @skip_on_ovrtx_05_color
     def test_rendered_image(self, yolo_out: Path) -> None:
         result_path = yolo_out / "images" / "val" / "000000.jpg"
         golden = YOLO_EXPECTED / "images" / "val" / "000000.jpg"
@@ -564,6 +586,7 @@ class TestBOPGolden:
         assert golden.exists(), f"Golden missing: {golden}. Run UPDATE_GOLDEN=1 pytest."
         _assert_json_close(result, _read_json(golden))
 
+    @skip_on_ovrtx_05_color
     def test_rgb_image(self, bop_out: Path) -> None:
         result_path = bop_out / "000000" / "rgb" / "000000.png"
         golden = BOP_EXPECTED / "rgb_000000.png"
@@ -601,6 +624,7 @@ class TestCosmosGolden:
         assert golden.exists(), f"Golden missing: {golden}. Run UPDATE_GOLDEN=1 pytest."
         _assert_json_close(result, _read_json(golden))
 
+    @skip_on_ovrtx_05_color
     def test_thumbnail_image(self, cosmos_out) -> None:
         result_path = cosmos_out.dir / "thumbnails" / "000000.jpg"
         golden = COSMOS_EXPECTED / "thumbnails" / "000000.jpg"
@@ -613,6 +637,7 @@ class TestCosmosGolden:
             ImageMetricThresholds(mae_max=2.0, rmse_max=4.0, psnr_min=35.0),
         )
 
+    @skip_on_ovrtx_05_color
     def test_rgb_video_frame(self, cosmos_out) -> None:
         """Content of the RGB video (the frame fed to the encoder)."""
         _assert_frame_matches_golden(
@@ -739,6 +764,7 @@ class TestLeRobotGolden:
         assert golden.exists(), f"Golden missing: {golden}. Run UPDATE_GOLDEN=1 pytest."
         _assert_json_close(rows, _read_json(golden))
 
+    @skip_on_ovrtx_05_color
     def test_video_frame_matches_golden(self, lerobot_out) -> None:
         """Content of the observation video (the frame fed to the encoder)."""
         _assert_frame_matches_golden(

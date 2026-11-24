@@ -1,0 +1,89 @@
+{
+  "skill_name": "ovannotators-dataset-quickstart",
+  "evals": [
+    {
+      "id": "ovannotators-dataset-quickstart-cpu-first-run",
+      "prompt": "I just heard about ovannotators and want to see a labeled synthetic dataset come out of it. I'm on a laptop with no NVIDIA GPU. Get me a working example and show me what it wrote.",
+      "expected_skill": "ovannotators-dataset-quickstart",
+      "expected_output": "Chooses the CPU lane without asking for a format. Installs ovannotators with pip (or uv add), writes a script that feeds NumPy frames with LdrColor and SemanticBoundingBox2DTight to the coco writer through a DiskBackend, runs it to print 'Wrote 4 files to _out/dataset_quickstart', then verifies annotations/instances_train.json reports 3 images and 6 annotations. Explains that category names are '1' and '2' because the demonstration supplies no SemanticIdMap.",
+      "assertions": [
+        "Runs on CPU and does not install ovrtx or ovstage.",
+        "Writes a COCO dataset whose annotations/instances_train.json lists 3 images and 6 annotations.",
+        "Opens the written annotation file instead of trusting the script's exit code.",
+        "Explains why category names are numeric in the CPU lane."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-macos",
+      "prompt": "Generate a small COCO dataset from synthetic data with ovannotators on my MacBook.",
+      "expected_skill": "ovannotators-dataset-quickstart",
+      "expected_output": "Picks the CPU lane because macOS has no supported NVIDIA renderer, runs the CPU COCO capture, and verifies the image and annotation counts from the written files.",
+      "assertions": [
+        "Does not attempt the GPU lane on macOS.",
+        "Reports the output directory and the image and annotation counts."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-gpu-usd-scene",
+      "prompt": "I have an RTX workstation on Linux and a clone of the ovannotators repo, but I'm not at it right now. Give me the exact steps to render the example USD scene into an annotated COCO dataset there, so I can see real labels.",
+      "expected_skill": "ovannotators-dataset-quickstart",
+      "expected_output": "Chooses the GPU lane and proposes a plan without needing to render: install ovrtx and ovstage with the pins from the 'Advanced: requirements-driven renderer capture' section of examples/README.md, run 'uv run python examples/requirements_capture.py --writer coco --profile detection', and then check that the output ends with 'Wrote N files to _out/requirements_capture/coco-detection' and that categories in annotations/instances_train.json have readable names.",
+      "assertions": [
+        "Takes the ovrtx and ovstage versions from examples/README.md rather than guessing them.",
+        "Proposes running examples/requirements_capture.py with --writer coco --profile detection.",
+        "Includes a step that checks the category names in the annotation file are readable labels."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-gpu-fallback",
+      "prompt": "Try the ovannotators GPU quickstart. If the renderer won't start on this machine, I still want to leave with a dataset I can open.",
+      "expected_skill": "ovannotators-dataset-quickstart",
+      "expected_output": "Checks whether this machine can render (for example with nvidia-smi) or attempts the GPU lane. When rendering is unavailable, runs the CPU lane so the user has a verified dataset, then reports why the GPU lane could not run: no usable GPU, or an ovrtx or ovstage error rather than an ovannotators one.",
+      "assertions": [
+        "Falls back to the CPU lane when rendering is unavailable, whether found by a GPU check or a renderer failure.",
+        "Leaves the user with a verified CPU dataset.",
+        "Reports why the GPU lane could not run without blaming ovannotators."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-negative-train-model",
+      "prompt": "I already have a COCO dataset on disk. Fine-tune a YOLO detector on it with PyTorch.",
+      "expected_skill": null,
+      "expected_output": "Addresses model training without loading ovannotators-dataset-quickstart or generating a new dataset.",
+      "assertions": [
+        "Does not load ovannotators-dataset-quickstart/SKILL.md.",
+        "Does not install or run ovannotators."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-negative-new-format",
+      "prompt": "Implement a Pascal VOC writer for ovannotators and register it.",
+      "expected_skill": null,
+      "expected_output": "Treats this as writer development. Does not run the quickstart capture.",
+      "assertions": [
+        "Does not load ovannotators-dataset-quickstart/SKILL.md.",
+        "Does not run the CPU COCO quickstart."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-negative-after-first-run",
+      "prompt": "I already ran the ovannotators quickstart and got its COCO example working. Now write my own NumPy RGB images and 2D bounding boxes as a YOLO detection dataset.",
+      "expected_skill": null,
+      "expected_output": "Treats this as a capture of the user's own arrays: writes them with the yolo writer and verifies the output. Does not rerun the CPU COCO quickstart.",
+      "assertions": [
+        "Does not load ovannotators-dataset-quickstart/SKILL.md.",
+        "Does not rerun the CPU COCO quickstart."
+      ]
+    },
+    {
+      "id": "ovannotators-dataset-quickstart-negative-newcomer-yolo",
+      "prompt": "I'm new to ovannotators. Write my NumPy RGB images and 2D bounding boxes as a YOLO detection dataset; use three synthetic stand-in frames to show it works.",
+      "expected_skill": null,
+      "expected_output": "Treats this as a capture of the user's own arrays in the requested format: writes YOLO with the yolo writer and verifies the output. Does not run the COCO quickstart first.",
+      "assertions": [
+        "Does not load ovannotators-dataset-quickstart/SKILL.md.",
+        "Does not run the CPU COCO quickstart."
+      ]
+    }
+  ]
+}

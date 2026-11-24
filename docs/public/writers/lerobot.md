@@ -10,8 +10,8 @@ video encoding requires an NVENC-capable NVIDIA GPU.
 ## Purpose and Inputs
 
 Use for a simple single-episode RGB sequence with LeRobot-style metadata.
-This writer requires only `LdrColor`. A profile for robot state/action signals, explicit
-episodes, and the official v3 dataset API is [coming soon](lerobot_v3.md). This writer emits
+This writer requires only `LdrColor`. For robot state/action signals, explicit episodes, and
+the LeRobot v3.0 dataset layout, use [lerobot_v3](lerobot_v3.md). This writer emits
 the earlier v2.0-style layout and does not claim v3 conformance.
 
 ## Output and Data Types
@@ -52,8 +52,8 @@ the longest sequence to keep the episode in one chunk.
 
 See [LeRobot dataset documentation](https://huggingface.co/docs/lerobot/lerobot-dataset-v3)
 for the v3 layout, which differs from the v2.0 metadata this
-writer emits. Use it for background only; v3 output is
-[coming soon](lerobot_v3.md).
+writer emits. Use it for background only; use [lerobot_v3](lerobot_v3.md) for
+v3 output.
 
 ## Configuration
 

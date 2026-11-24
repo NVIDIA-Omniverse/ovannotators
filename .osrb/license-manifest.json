@@ -1,0 +1,2765 @@
+{
+  "schema_version": 3,
+  "allowed_spdx_licenses": [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "CC0-1.0",
+    "HPND",
+    "ISC",
+    "LicenseRef-NvidiaProprietary",
+    "MIT",
+    "MIT-CMU",
+    "PSF-2.0",
+    "Zlib"
+  ],
+  "allowed_spdx_exceptions": [
+    "LLVM-exception"
+  ],
+  "documented_exceptions": {
+    "pynvvideocodec": {
+      "id": "NVBUG-6208455-4",
+      "scope": "bundled_lgpl_ffmpeg_notice",
+      "versions": [
+        "2.2.2"
+      ],
+      "reviewed_notice_hashes": [
+        "60ee4129d38ab18fc7253b5a9adaa0ea8ed1a073b397cec7636cec09474809d9",
+        "ed7c8b419b6591c7294c03b62558ca8247909b865f9ad2f765eb32fcb6a52206"
+      ],
+      "rationale": "PyNvVideoCodec is an MIT-licensed NVIDIA package; OSRB approved calling it (NVBug 6208455 #4, #5). Its NVIDIA-published wheel ships portions of FFmpeg under the GNU LGPL (NOTICES.txt); ovannotators depends on that wheel and does not redistribute FFmpeg (#7)."
+    }
+  },
+  "reviewed_copyleft_files": [
+    {
+      "package": "imagecodecs",
+      "path": "imagecodecs/licenses/LICENSE-lzf",
+      "sha256": "78411e481503fad783a6581bf78946812decae397004caf149639dac84182d4c",
+      "reason": "liblzf is dual-licensed BSD-2-Clause OR GPL-2.0 and is used under BSD-2-Clause (identical in imagecodecs 2026.3.6 and 2026.8.16)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.2.6.dist-info/LICENSE.txt",
+      "sha256": "c002bd26de7dc7aa464250a0de063d58fe55974452e4389e5c21c350a820bf06",
+      "reason": "manylinux bundle notice: libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.4.6.dist-info/licenses/LICENSE.txt",
+      "sha256": "4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488",
+      "reason": "manylinux bundle notice: libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "ovstorage",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "5deda5e1ed33a1d3398c387b8d1d9c4e3678e691bcc0c54e1b08c51cb0339429",
+      "reason": "r-efi is MIT OR Apache-2.0 OR LGPL-2.1-or-later; used under MIT"
+    },
+    {
+      "package": "pillow",
+      "path": "pillow-13.0.0.dist-info/licenses/LICENSE",
+      "sha256": "dda12a98c1979cf3d94df1cff45d27a4cb3f04a60c76f76902ac54cac03ec0ce",
+      "reason": "bundled FreeType used under the FTL (FTL OR GPL-2.0); liblzma is public domain and its GPL build scripts are not shipped"
+    },
+    {
+      "package": "pyarrow",
+      "path": "pyarrow-25.0.1.dist-info/licenses/LICENSE.txt",
+      "sha256": "d1c981370f1ffd4edcdd2fb3565c8939cc40c75e24e1f92d581d04e54f0dff81",
+      "reason": "Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause and the OpenSSL/SSLeay 'including the GNU Public Licence' clause"
+    },
+    {
+      "package": "typing-extensions",
+      "path": "typing_extensions-4.16.0.dist-info/licenses/LICENSE",
+      "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+      "reason": "PSF-2.0 historical GPL-compatibility table"
+    },
+    {
+      "package": "warp-lang",
+      "path": "warp_lang-1.17.0.dist-info/licenses/licenses/cuda-LICENSE.txt",
+      "sha256": "13706475591754a762162b3a27b17cb543515eeb1b5d0aa7df69b587339b19b8",
+      "reason": "first-party NVIDIA CUDA runtime supplement notice"
+    },
+    {
+      "package": "warp-lang",
+      "path": "warp_lang-1.17.0.dist-info/licenses/licenses/llvm-LICENSE.txt",
+      "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+      "reason": "Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause"
+    },
+    {
+      "package": "warp-lang",
+      "path": "warp_lang-1.17.0.dist-info/licenses/licenses/nvrtc-LICENSE.txt",
+      "sha256": "b981e1c574a9e8fc2f2aabe7ebed000e4a9e2874c6d50b49174ec0d5a8a5a831",
+      "reason": "first-party NVIDIA NVRTC runtime supplement notice"
+    },
+    {
+      "package": "imagecodecs",
+      "path": "imagecodecs/licenses/LICENSE-lzf",
+      "sha256": "0762464eca14e533d8369a82540d5aa70e5b7b652e9bd79097d066612ae4c0ce",
+      "reason": "Linux aarch64 wheels: liblzf is dual-licensed BSD-2-Clause OR GPL-2.0 and is used under BSD-2-Clause"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.2.6.dist-info/LICENSE.txt",
+      "sha256": "14256cc3a2c9d32ac284da96b937feb44f72dd90bee2317ac3020166846ad99d",
+      "reason": "Windows x86, Windows x86_64 wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.2.6.dist-info/LICENSE.txt",
+      "sha256": "487cab6f200ed757edc72d71e8a2a0a6ed6de9848376bccacb1726075456e8a3",
+      "reason": "Linux aarch64, musl Linux wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.2.6.dist-info/LICENSE.txt",
+      "sha256": "b4ae62887f4dd6e9430b1a8d7017a3ba84c5d7aa630b9d17ed6f25c21b0ec5b4",
+      "reason": "macOS wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.4.6.dist-info/licenses/LICENSE.txt",
+      "sha256": "649a589ab31076e79e9ce62ba24eae9959598124176640dbc95f87bd10f34fcf",
+      "reason": "macOS wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "numpy",
+      "path": "numpy-2.4.6.dist-info/licenses/LICENSE.txt",
+      "sha256": "a804dff0ead9fadc5293456410bcbfc32bf024be9c4513459663fb7b442d2341",
+      "reason": "Windows arm64, Windows x86, Windows x86_64 wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later)"
+    },
+    {
+      "package": "ovstorage",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "fa98c8bf26eaef98ffa1298cf8146225f78ec4f7884242479a9ece43eccf1884",
+      "reason": "Windows x86_64 wheels: r-efi is MIT OR Apache-2.0 OR LGPL-2.1-or-later; used under MIT"
+    },
+    {
+      "package": "pillow",
+      "path": "pillow-13.0.0.dist-info/licenses/LICENSE",
+      "sha256": "1b2300277a05f419e4e754971f11a99b4ce6bccd7611f798f7edbfaf21727fc7",
+      "reason": "Windows arm64 wheels: bundled FreeType used under the FTL (FTL OR GPL-2.0; the GPLv2 text is the unused alternative); no GPL-only library such as libimagequant, raqm, or fribidi is bundled"
+    },
+    {
+      "package": "pillow",
+      "path": "pillow-13.0.0.dist-info/licenses/LICENSE",
+      "sha256": "988ffe8ab3480b0f4e9a0ab2702bffd73d9fb6b47198043fb3ba101a62fac236",
+      "reason": "Windows x86, Windows x86_64 wheels: bundled FreeType used under the FTL (FTL OR GPL-2.0; the GPLv2 text is the unused alternative); no GPL-only library such as libimagequant, raqm, or fribidi is bundled"
+    },
+    {
+      "package": "pyarrow",
+      "path": "pyarrow-25.0.1.dist-info/licenses/LICENSE.txt",
+      "sha256": "b410defd7f5f8cac9cfa54a3a49fcd971de2be0462bbab980c8f869f1aac94d3",
+      "reason": "Windows x86_64 wheels: Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause and the OpenSSL/SSLeay 'including the GNU Public Licence' clause"
+    }
+  ],
+  "package_license_field_overrides": {
+    "python-dateutil": {
+      "Dual License": "Apache-2.0 AND BSD-3-Clause"
+    }
+  },
+  "forbidden_packages": [
+    "av",
+    "datasets",
+    "huggingface-hub",
+    "lancedb",
+    "lerobot",
+    "lerobot-lancedb",
+    "opencv-python",
+    "opencv-python-headless",
+    "torch",
+    "torchcodec",
+    "torchvision"
+  ],
+  "forbidden_package_prefixes": [
+    "opencv-"
+  ],
+  "runtime_packages": [
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "annotated_types-0.8.0-py3-none-any.whl",
+          "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "asciitree",
+      "version": "0.3.3",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "asciitree-0.3.3.tar.gz",
+          "sha256": "4aa4b9b649f85e3fcb343363d97564aa1fb62e249677f2e18a96765145cc0f6e",
+          "platform": "sdist"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "boto3",
+      "version": "1.43.93",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "boto3-1.43.93-py3-none-any.whl",
+          "sha256": "3c948fe231490d446bf90bf3322d1452632107329d3683b37d88b7399bf481a0",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "botocore",
+      "version": "1.43.93",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "botocore-1.43.93-py3-none-any.whl",
+          "sha256": "3ca57bb5d26d88b554a74de708a5c991f45306436c91aacca931252d1d4d54ff",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "fasteners",
+      "version": "0.20",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "fasteners-0.20-py3-none-any.whl",
+          "sha256": "9422c40d1e350e4259f509fb2e608d6bc43c0136f79a00db1b49046029d0b3b7",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "imagecodecs",
+      "version": "2026.3.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-manylinux_2_28_x86_64.whl",
+          "sha256": "e30a14aa2e1c6c90e00375292726486c1d90bf003b1414d608ea4d1f62fd8a79",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-manylinux_2_28_aarch64.whl",
+          "sha256": "30fa140bb1a112a889926af36977214ed52a22e4557356043259b5e2f79cfba5",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-macosx_11_0_arm64.whl",
+          "sha256": "e64037f22980a211b17bf6bdf03f14ff459a7432eec24f7a58c342f6992132fa",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-macosx_10_15_x86_64.whl",
+          "sha256": "44cfb3b609d941014f8ac7cf8611b15ccfd7119443bbb6b5e53916b242d31f9e",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-win_arm64.whl",
+          "sha256": "fc4856913be6c8b3861223158920d934a0ae203149a435f585622dbbff8ed696",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-win32.whl",
+          "sha256": "c972a45dfee1befbac048ba3492607003e9a185811e8febdc1ed531d48c07e75",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "imagecodecs-2026.3.6-cp311-abi3-win_amd64.whl",
+          "sha256": "e8fba5b9ac7be109ed35070208bc1683fa17cc381ed9535a4eae200c6d883bd8",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "BSD-3-Clause",
+        "shipped_files": "BSD-3-Clause, BSD-2-Clause, MIT, Apache-2.0, ISC",
+        "shipped_primary": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "imagecodecs/licenses/LICENSE-lzf: liblzf is dual-licensed BSD-2-Clause OR GPL-2.0 and is used under BSD-2-Clause (identical in imagecodecs 2026.3.6 and 2026.8.16) (reviewed sha256 78411e481503fad783a6581bf78946812decae397004caf149639dac84182d4c)"
+      ],
+      "bundled_binaries_count": 573,
+      "bundled_binaries_sample": [
+        "imagecodecs.libs/libLerc-d21eeb01.so.4",
+        "imagecodecs.libs/libSPERR-a1afaa70.so.0.8.4",
+        "imagecodecs.libs/libSZ3c-362febd3.so",
+        "imagecodecs.libs/libaec-52e8428e.so.0.1.6",
+        "imagecodecs.libs/libaom-391a2213.so.3.13.1",
+        "imagecodecs.libs/libavif-d03e6b42.so.16.4.0",
+        "imagecodecs.libs/libblosc-6e2f1ccf.so.1.21.6",
+        "imagecodecs.libs/libblosc2-1430c7c0.so.2.23.0",
+        "imagecodecs.libs/libbrotlicommon-fdd547e2.so.1.2.0",
+        "imagecodecs.libs/libbrotlidec-622aeda0.so.1.2.0"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "imagecodecs",
+      "version": "2026.8.16",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-manylinux_2_28_x86_64.whl",
+          "sha256": "c1068e0db9bc09cbd32510e543caed50f231096aecbb4c9cf7bcfbd2ffc53a50",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-manylinux_2_28_aarch64.whl",
+          "sha256": "908fa48740d52acbaea200d422e2267623122a1987fc85e898c77b2bb02d3e00",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-macosx_11_0_arm64.whl",
+          "sha256": "53f4b7d70a5554f8d5f6f09746e5e9569ce4932b12e6997d805b81c377621fed",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-macosx_10_15_x86_64.whl",
+          "sha256": "45be0f38ca22144dcaf2927feceab6f765cd311581e554302abc3fcb9c3aeddb",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-win_arm64.whl",
+          "sha256": "b05e3ae5fa190c9722a0865cc06a3efccf27b025cbeeb8e9fd6beae0de5ce1d2",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-win32.whl",
+          "sha256": "82bc27758f25d181eb4fd4fd8997b3eb07118dc673dee93aa3e64df8485e89bc",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "imagecodecs-2026.8.16-cp312-abi3-win_amd64.whl",
+          "sha256": "6444a421272665ebd0116b54ad96347b86b4a5e21b59ed184487145cd3937f4b",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "BSD-3-Clause",
+        "shipped_files": "BSD-3-Clause, BSD-2-Clause, MIT, Apache-2.0, ISC",
+        "shipped_primary": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "imagecodecs/licenses/LICENSE-lzf: liblzf is dual-licensed BSD-2-Clause OR GPL-2.0 and is used under BSD-2-Clause (identical in imagecodecs 2026.3.6 and 2026.8.16) (reviewed sha256 78411e481503fad783a6581bf78946812decae397004caf149639dac84182d4c)",
+        "imagecodecs/licenses/LICENSE-lzf: Linux aarch64 wheels: liblzf is dual-licensed BSD-2-Clause OR GPL-2.0 and is used under BSD-2-Clause (reviewed sha256 0762464eca14e533d8369a82540d5aa70e5b7b652e9bd79097d066612ae4c0ce)"
+      ],
+      "bundled_binaries_count": 634,
+      "bundled_binaries_sample": [
+        "imagecodecs.libs/libImath-3_2-98e3d33b.so.30.3.2.2",
+        "imagecodecs.libs/libLerc-df6790a3.so.4",
+        "imagecodecs.libs/libOpenEXRCore-3_4-a446f128.so.33.3.4.14",
+        "imagecodecs.libs/libSPERR-dc3d0728.so.0.8.5",
+        "imagecodecs.libs/libSZ3c-0ae50912.so",
+        "imagecodecs.libs/libaec-c0dd3176.so.0.1.7",
+        "imagecodecs.libs/libaom-5164abf8.so.3.14.1",
+        "imagecodecs.libs/libavif-db7cb030.so.16.4.2",
+        "imagecodecs.libs/libblosc-0efaad68.so.1.21.6",
+        "imagecodecs.libs/libblosc2-fc0f31f8.so.3.3.2"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "imagecodecs-numcodecs",
+      "version": "2026.3.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "imagecodecs_numcodecs-2026.3.6-py3-none-any.whl",
+          "sha256": "add6e4620b5dafdcf03de49838e70a9745ad91ce7ef3a59fd4e124428ced6cc4",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "imagecodecs-numcodecs",
+      "version": "2026.8.16",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "imagecodecs_numcodecs-2026.8.16-py3-none-any.whl",
+          "sha256": "c3675f335971b1f13f84ed863c5a589de18d18f33e524ffa274ee2226f70cdc2",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "jmespath",
+      "version": "1.1.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "jmespath-1.1.0-py3-none-any.whl",
+          "sha256": "a5663118de4908c91729bea0acadca56526eb2698e83de10cd116ae0f4e97c64",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "lance-namespace",
+      "version": "0.8.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "lance_namespace-0.8.6-py3-none-any.whl",
+          "sha256": "571eae34f9aad70e5b05020416c2860889b9ec82993ccd0eb015e7b39c3ea309",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "lance-namespace-urllib3-client",
+      "version": "0.8.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "lance_namespace_urllib3_client-0.8.6-py3-none-any.whl",
+          "sha256": "9d78249c3fb15aa3d15d668f78f04a275af3d08d800a7027492f37996ac4968b",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "numcodecs",
+      "version": "0.12.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "numcodecs-0.12.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "sha256": "c258bd1d3dfa75a9b708540d23b2da43d63607f9df76dfa0309a7597d1de3b73",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "numcodecs-0.12.1-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "760627780a8b6afdb7f942f2a0ddaf4e31d3d7eea1d8498cf0fd3204a33c4618",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "numcodecs-0.12.1-cp312-cp312-macosx_10_9_x86_64.whl",
+          "sha256": "2f84df6b8693206365a5b37c005bfa9d1be486122bde683a7b6446af4b75d862",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "numcodecs-0.12.1-cp312-cp312-win_amd64.whl",
+          "sha256": "e04649ea504aff858dbe294631f098fbfd671baf58bfc04fc48d746554c05d67",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 32,
+      "bundled_binaries_sample": [
+        "numcodecs/_shuffle.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/blosc.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/compat_ext.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/fletcher32.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/jenkins.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/lz4.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/vlen.cpython-312-x86_64-linux-gnu.so",
+        "numcodecs/zstd.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "numpy",
+      "version": "2.2.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "core",
+        "cosmos-multiview",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "sha256": "fd83c01228a688733f1ded5201c678f0c53ecc1006ffbc404db9f7a899ac6249",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "sha256": "f2618db89be1b4e05f7a1a847a9c1c0abd63e63a1607d892dd54668dd92faf87",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "de749064336d37e340f640b05f24e9e3dd678c57318c7289d222a8a2f543e90c",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "41c5a21f4a04fa86436124d388f6ed60a9343a6f767fced1a8a71c3fbca038ff",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-musllinux_1_2_aarch64.whl",
+          "sha256": "37c0ca431f82cd5fa716eca9506aefcabc247fb27ba69c5062a6d3ade8cf8f49",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-musllinux_1_2_x86_64.whl",
+          "sha256": "fe27749d33bb772c80dcd84ae7e8df2adc920ae8297400dabec45f0dedb3f6de",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-win32.whl",
+          "sha256": "4eeaae00d789f66c7a25ac5f34b71a7035bb474e679f410e5e1a94deb24cf2d4",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "numpy-2.2.6-cp312-cp312-win_amd64.whl",
+          "sha256": "c1f9540be57940698ed329904db803cf7a402f3fc200bfe599334c9bd84a40b2",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "BSD-3-Clause",
+        "Classifier": "BSD-3-Clause",
+        "shipped_files": "BSD-3-Clause, BSD-2-Clause, MIT",
+        "shipped_primary": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "numpy-2.2.6.dist-info/LICENSE.txt: manylinux bundle notice: libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 c002bd26de7dc7aa464250a0de063d58fe55974452e4389e5c21c350a820bf06)",
+        "numpy-2.2.6.dist-info/LICENSE.txt: Linux aarch64, musl Linux wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 487cab6f200ed757edc72d71e8a2a0a6ed6de9848376bccacb1726075456e8a3)",
+        "numpy-2.2.6.dist-info/LICENSE.txt: macOS wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 b4ae62887f4dd6e9430b1a8d7017a3ba84c5d7aa630b9d17ed6f25c21b0ec5b4)",
+        "numpy-2.2.6.dist-info/LICENSE.txt: Windows x86, Windows x86_64 wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 14256cc3a2c9d32ac284da96b937feb44f72dd90bee2317ac3020166846ad99d)"
+      ],
+      "bundled_binaries_count": 232,
+      "bundled_binaries_sample": [
+        "numpy.libs/libgfortran-040039e1-0352e75f.so.5.0.0",
+        "numpy.libs/libquadmath-96973f99-934c22de.so.0.0.0",
+        "numpy.libs/libscipy_openblas64_-56d6093b.so",
+        "numpy/_core/_multiarray_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_multiarray_umath.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_operand_flag_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_rational_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_simd.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_struct_ufunc_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_umath_tests.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "numpy",
+      "version": "2.4.6",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "core",
+        "cosmos-multiview",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "90f9849678c75fe7afa2d348ac842c168b0a4d3d61919687216dfc547976d853",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "sha256": "5f9fb9157b4ce2971008323afe46053787b526ef624fea915b261468a8421a0f",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "ebfb099f8dcf083deef3ac1ca4c1503f387cf76296fcb3816b66f5ecb5f54fdb",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "001fbb8e08d942dd57599e781f2472269ee7f2755fae407b4f67b2f0b17da3f1",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-musllinux_1_2_aarch64.whl",
+          "sha256": "c1a2af6c6ef86344a6b0db6b97834208bf598db514f2b155042439b62605601a",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-musllinux_1_2_x86_64.whl",
+          "sha256": "e5805d5a22fd19c8ccff10a9561f9df94436b0545619ea579db2d3c35294bce2",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-win_arm64.whl",
+          "sha256": "4081eb135ac24158bd51cdfbef16f1c64df7063b1143f24731387137c092bec8",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-win32.whl",
+          "sha256": "e3eeb0aabd6bd5ce64faae67e9935203a6991b4bc2a485a767fbafb2c5125f45",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "numpy-2.4.6-cp312-cp312-win_amd64.whl",
+          "sha256": "d8e8286dd7cea7895157318d1b91cdacac64c479f3cbc8dce548331728484751",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "declared_license": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+        "shipped_files": "BSD-3-Clause, ISC, Apache-2.0, MIT, BSD-2-Clause",
+        "shipped_primary": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "numpy-2.4.6.dist-info/licenses/LICENSE.txt: manylinux bundle notice: libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 4860083caa0de2ac3292ca98bd074bd8f45d8b32624e37b1e70a240bff61e488)",
+        "numpy-2.4.6.dist-info/licenses/LICENSE.txt: macOS wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 649a589ab31076e79e9ce62ba24eae9959598124176640dbc95f87bd10f34fcf)",
+        "numpy-2.4.6.dist-info/licenses/LICENSE.txt: Windows arm64, Windows x86, Windows x86_64 wheels: bundle notice: GCC runtime for OpenBLAS/libgfortran (GPL-3.0-or-later WITH GCC-exception-3.1) and, where bundled, dynamically linked libquadmath (LGPL-2.1-or-later) (reviewed sha256 a804dff0ead9fadc5293456410bcbfc32bf024be9c4513459663fb7b442d2341)"
+      ],
+      "bundled_binaries_count": 274,
+      "bundled_binaries_sample": [
+        "numpy.libs/libgfortran-040039e1-0352e75f.so.5.0.0",
+        "numpy.libs/libquadmath-96973f99-934c22de.so.0.0.0",
+        "numpy.libs/libscipy_openblas64_-32a4b2a6.so",
+        "numpy/_core/_multiarray_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_multiarray_umath.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_operand_flag_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_rational_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_simd.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_struct_ufunc_tests.cpython-312-x86_64-linux-gnu.so",
+        "numpy/_core/_umath_tests.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "nvidia-nvimgcodec-cu12",
+      "version": "0.9.0.20",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-gpu",
+        "gpu"
+      ],
+      "artifacts": [
+        {
+          "filename": "nvidia_nvimgcodec_cu12-0.9.0.20-py3-none-manylinux_2_28_x86_64.whl",
+          "sha256": "00627d63501ff83a7578683f784f03d07c6b69a1db6017fdabfacb0fc1c4cb8a",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "nvidia_nvimgcodec_cu12-0.9.0.20-py3-none-manylinux_2_28_aarch64.whl",
+          "sha256": "e2872c2a99e8a532cebaea852d4a96306e2e886706c1f384d8627371a013aca0",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "nvidia_nvimgcodec_cu12-0.9.0.20-py3-none-win_amd64.whl",
+          "sha256": "9de1128539f24a0fe7e287011a59d0bbf24ea88f76d0eefe3fcbe83f58c18d8b",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "LicenseRef-NvidiaProprietary",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0",
+        "shipped_files": "LicenseRef-NvidiaProprietary",
+        "shipped_primary": "LicenseRef-NvidiaProprietary"
+      },
+      "disagreements": [
+        "METADATA (License=Apache-2.0) disagrees with shipped license file (LicenseRef-NvidiaProprietary / NVIDIA Software License Agreement)"
+      ],
+      "informational_notes": [],
+      "bundled_binaries_count": 49,
+      "bundled_binaries_sample": [
+        "nvidia/nvimgcodec/extensions/libjpeg_turbo_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libnvbmp_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libnvjpeg2k_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libnvjpeg_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libnvpnm_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libnvtiff_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libopencv_ext.so.0.9.0",
+        "nvidia/nvimgcodec/extensions/libtiff_ext.so.0.9.0",
+        "nvidia/nvimgcodec/libnvimgcodec.so.0",
+        "nvidia/nvimgcodec/nvimgcodec_impl.cpython-310-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "openexr",
+      "version": "3.4.15",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "core"
+      ],
+      "artifacts": [
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-manylinux_2_28_x86_64.whl",
+          "sha256": "5f81c38ec733259da31e257d964de5cfb4b4ef0b9aa1e7037b71fae709abe710",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-manylinux_2_28_aarch64.whl",
+          "sha256": "344b89740b45fe6390c4cb980036831ea33f4d85333bdfb1cfd7b67656c68afb",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "eb305b2d3a074a259bcf397f56799ed0947ffcafc0ea8f7666a01fbed4a01daa",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-macosx_10_15_universal2.whl",
+          "sha256": "7520164c6906535c37bd938c9744d4d341c1e6af794d0d15d9517e4318702cda",
+          "platform": "macos-universal2"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-macosx_10_15_x86_64.whl",
+          "sha256": "78570daa1bd3d230f423b9463eb89f1d772f043c6299a48b79d007def7356c92",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-musllinux_1_2_aarch64.whl",
+          "sha256": "0cd4a4dbcd76e8a09021d2d01d9add7fba71a637d2eb6fdbbb2f321f2e87e71c",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-musllinux_1_2_x86_64.whl",
+          "sha256": "b88f81bd7e3ae6f8d00316d5ad1bf59a9069ed8f49a25ca08ff0cd388007d7e4",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "openexr-3.4.15-cp312-cp312-win_amd64.whl",
+          "sha256": "7aa145813acfe10a83d6e89340349379828190b321608e69f2aee426e10c890b",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "BSD-3-Clause",
+      "declared_license": "BSD-3-Clause",
+      "license_source": "shipped_license_file",
+      "metadata_candidates": {
+        "shipped_files": "BSD-3-Clause",
+        "shipped_primary": "BSD-3-Clause"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 12,
+      "bundled_binaries_sample": [
+        "OpenEXR.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "ovstorage",
+      "version": "0.3.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "ovstorage"
+      ],
+      "artifacts": [
+        {
+          "filename": "ovstorage-0.3.0-cp310-abi3-manylinux_2_34_x86_64.whl",
+          "sha256": "59bfd5d9382d9615a75a10f505ce9adb88b51766fecd861d3da7b1a597b2ea15",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "ovstorage-0.3.0-cp310-abi3-manylinux_2_34_aarch64.whl",
+          "sha256": "e7e4bdcd25256c8e5b8f06eed2fd8807c3ce25b52f35d56bbe87f9d56fc7840d",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "ovstorage-0.3.0-cp310-abi3-win_amd64.whl",
+          "sha256": "149a9fece5fc4a48ce18846acdb0d815778fe6fb62ca9719820278ef38eaf421",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "Apache-2.0",
+        "shipped_files": "LicenseRef-NvidiaProprietary, Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "THIRD_PARTY_NOTICES.md: r-efi is MIT OR Apache-2.0 OR LGPL-2.1-or-later; used under MIT (reviewed sha256 5deda5e1ed33a1d3398c387b8d1d9c4e3678e691bcc0c54e1b08c51cb0339429)",
+        "THIRD_PARTY_NOTICES.md: Windows x86_64 wheels: r-efi is MIT OR Apache-2.0 OR LGPL-2.1-or-later; used under MIT (reviewed sha256 fa98c8bf26eaef98ffa1298cf8146225f78ec4f7884242479a9ece43eccf1884)"
+      ],
+      "bundled_binaries_count": 39,
+      "bundled_binaries_sample": [
+        "ovstorage/ovstorage.abi3.so",
+        "ovstorage/plugins/libovstorage_plugin_azure.so",
+        "ovstorage/plugins/libovstorage_plugin_broker.so",
+        "ovstorage/plugins/libovstorage_plugin_cache.so",
+        "ovstorage/plugins/libovstorage_plugin_core.so",
+        "ovstorage/plugins/libovstorage_plugin_gcs.so",
+        "ovstorage/plugins/libovstorage_plugin_http.so",
+        "ovstorage/plugins/libovstorage_plugin_hub_cache.so",
+        "ovstorage/plugins/libovstorage_plugin_huggingface.so",
+        "ovstorage/plugins/libovstorage_plugin_nucleus.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pillow",
+      "version": "13.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "core"
+      ],
+      "artifacts": [
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+          "sha256": "42d63be3af4f9b951b199b0a9d23365d37ab14687e6d77b74940432c8515c4ca",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp313-cp313-ios_13_0_arm64_iphoneos.whl",
+          "sha256": "e98b4f91f99b24b1da72e10621ba181f7281922384a7403094debb4199de6c00",
+          "platform": "ios_13_0_arm64_iphoneos"
+        },
+        {
+          "filename": "pillow-13.0.0-cp313-cp313-ios_13_0_arm64_iphonesimulator.whl",
+          "sha256": "34fb3db1149c879343861831728c243c432d4a5afc8f1878ca7612ef8de2a033",
+          "platform": "ios_13_0_arm64_iphonesimulator"
+        },
+        {
+          "filename": "pillow-13.0.0-cp313-cp313-ios_13_0_x86_64_iphonesimulator.whl",
+          "sha256": "2d50500a4a3bc6469adcdb319cf05d688b08ca3bf0f22a05339f3b25b433a599",
+          "platform": "ios_13_0_x86_64_iphonesimulator"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl",
+          "sha256": "8bf295fe459343bc6093c8e5e0df60bfa189e0fcb775a22e2c2488fdeccc6c0d",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "fc481f742ccda20e9ed760b8f978dff50f2a4e9bc253ac167fb0a05b0783ef52",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-macosx_10_13_x86_64.whl",
+          "sha256": "67c8d44ad89fa7eb88de5d6ef6199b1e03dd24974f85a67639fc8badb801fe79",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-musllinux_1_2_aarch64.whl",
+          "sha256": "4bd024d567eca931b668978d672dba914d4b8e2628e2c3073a2ad178de8a2620",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-musllinux_1_2_x86_64.whl",
+          "sha256": "23edf4ec4b6f4f240e8df6e4985e9ee2ced86474632433e55fb1e2548744bf40",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-win_arm64.whl",
+          "sha256": "c3bc8ee0271387e0b1e3ad0ff893645990a656e79bf9c42f4f734a3642b11d51",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-win32.whl",
+          "sha256": "02464da86f561f410e13b061ec37c3068a9cb557a095494157742d07b3c24a27",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "pillow-13.0.0-cp312-cp312-win_amd64.whl",
+          "sha256": "ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT-CMU",
+      "declared_license": "MIT-CMU",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT-CMU",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "pillow-13.0.0.dist-info/licenses/LICENSE: bundled FreeType used under the FTL (FTL OR GPL-2.0); liblzma is public domain and its GPL build scripts are not shipped (reviewed sha256 dda12a98c1979cf3d94df1cff45d27a4cb3f04a60c76f76902ac54cac03ec0ce)",
+        "pillow-13.0.0.dist-info/licenses/LICENSE: Windows arm64 wheels: bundled FreeType used under the FTL (FTL OR GPL-2.0; the GPLv2 text is the unused alternative); no GPL-only library such as libimagequant, raqm, or fribidi is bundled (reviewed sha256 1b2300277a05f419e4e754971f11a99b4ce6bccd7611f798f7edbfaf21727fc7)",
+        "pillow-13.0.0.dist-info/licenses/LICENSE: Windows x86, Windows x86_64 wheels: bundled FreeType used under the FTL (FTL OR GPL-2.0; the GPLv2 text is the unused alternative); no GPL-only library such as libimagequant, raqm, or fribidi is bundled (reviewed sha256 988ffe8ab3480b0f4e9a0ab2702bffd73d9fb6b47198043fb3ba101a62fac236)"
+      ],
+      "bundled_binaries_count": 209,
+      "bundled_binaries_sample": [
+        "PIL/_avif.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imaging.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imagingcms.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imagingft.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imagingmath.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imagingmorph.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_imagingtk.cpython-312-x86_64-linux-gnu.so",
+        "PIL/_webp.cpython-312-x86_64-linux-gnu.so",
+        "pillow.libs/libXau-154567c4.so.6.0.0",
+        "pillow.libs/libavif-c6062d5f.so.16.4.2"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pyarrow",
+      "version": "25.0.1",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview",
+        "lerobot"
+      ],
+      "artifacts": [
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-manylinux_2_28_x86_64.whl",
+          "sha256": "5389cdf79447ed1515c9e31620e6e1e2302249564d603f2ad727d4f6d313e4c3",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-manylinux_2_28_aarch64.whl",
+          "sha256": "4340f0ba6c1d2e13f21658de1d7c662ca2545018568d0030a1e9afca159d87e3",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-macosx_12_0_arm64.whl",
+          "sha256": "df961f2e7ae9cf496459259d798652c70625f6c080650d6952f8c04053c58ee9",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-macosx_12_0_x86_64.whl",
+          "sha256": "cc4aa407fde9fc660be3939e49ea31f50f3e9fec17c0ec63159f7711edd3efc9",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-musllinux_1_2_aarch64.whl",
+          "sha256": "d51592cb7561e87877c506113e7adbf1342ab579e6c21f0ef44b8ba41cb74c80",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-musllinux_1_2_x86_64.whl",
+          "sha256": "6109c94d8b9f3b17a041daca16cacb2f651ad8f1ef70a4232c2c0f37a23da2a8",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "pyarrow-25.0.1-cp312-cp312-win_amd64.whl",
+          "sha256": "8858d7bfc22e3f51529aeaa4077225029724623e4595dc9eff8c793935c34140",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "pyarrow-25.0.1.dist-info/licenses/LICENSE.txt: Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause and the OpenSSL/SSLeay 'including the GNU Public Licence' clause (reviewed sha256 d1c981370f1ffd4edcdd2fb3565c8939cc40c75e24e1f92d581d04e54f0dff81)",
+        "pyarrow-25.0.1.dist-info/licenses/LICENSE.txt: Windows x86_64 wheels: Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause and the OpenSSL/SSLeay 'including the GNU Public Licence' clause (reviewed sha256 b410defd7f5f8cac9cfa54a3a49fcd971de2be0462bbab980c8f869f1aac94d3)"
+      ],
+      "bundled_binaries_count": 269,
+      "bundled_binaries_sample": [
+        "pyarrow/_acero.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_azurefs.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_compute.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_csv.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_dataset.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_dataset_orc.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_dataset_parquet.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_dataset_parquet_encryption.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_feather.cpython-312-x86_64-linux-gnu.so",
+        "pyarrow/_flight.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.5",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "pydantic-2.13.5-py3-none-any.whl",
+          "sha256": "346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.5",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "sha256": "0fc5be0abd4a407e200d844b404e33639a554e7bd0d448e7b9ae181be4789ac2",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "sha256": "4fdc8b93a41521988916eeaa271173fcca7fa0803d62f87675aac8dcec1c8e29",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_armv7l.manylinux2014_armv7l.whl",
+          "sha256": "b98134087d9de723658d17a42c7d0da8d6e2ef08015dee7dc93889047315f5e4",
+          "platform": "linux-armv7l"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_5_i686.manylinux1_i686.whl",
+          "sha256": "c7ea57fc63aa7da93a1bd2d644e6577befae10c52c4e36377635eea1056a74f5",
+          "platform": "linux-i686"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl",
+          "sha256": "e652ab17569c94bff5475520f907b7148b8c24036a8ebbe5cf7cf7493d28579a",
+          "platform": "linux-ppc64le"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_31_riscv64.whl",
+          "sha256": "816ff0a6550ffc06c098ccd2e0698600f9aa7da192a79eaa6f9af504a35db869",
+          "platform": "linux-riscv64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-manylinux_2_17_s390x.manylinux2014_s390x.whl",
+          "sha256": "d925f3d9afd05a8c0fb3a1031463a8d59ebe5e2afad297e29c78be19e13b4e62",
+          "platform": "linux-s390x"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-macosx_11_0_arm64.whl",
+          "sha256": "a39ac25a9a2fa4072efdb429833c4a4c8009a51ff9eea3eeae131713cd27991e",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-macosx_10_12_x86_64.whl",
+          "sha256": "b9fe6fb92520e3fd61f2e49000b6911b188824f089b75973ea06d6267f0b476d",
+          "platform": "macos-x86_64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-musllinux_1_1_aarch64.whl",
+          "sha256": "efd62a42486f1bda5d24cb4f63d15a3c7768375fe83d36f9417b4ad7a2fb20b3",
+          "platform": "musllinux-aarch64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-musllinux_1_1_armv7l.whl",
+          "sha256": "2bc9419666990c06d7397831f2126a1ecc3594aaa3ff7de5bf2d066802f4e07b",
+          "platform": "musllinux-armv7l"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-musllinux_1_1_x86_64.whl",
+          "sha256": "18a09e1e1011b462f2e32774f25859ef1223d5c2b0546a633cf56654710721e0",
+          "platform": "musllinux-x86_64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-win_arm64.whl",
+          "sha256": "f7b0ec93a2893de856652154d73b7ba622f26fa97726487dcac373de5f4c6084",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-win32.whl",
+          "sha256": "5cb482e9e84c851f4e623fe4acc1ced89168cf1fe18f7089db4548c8f5bbb65b",
+          "platform": "windows-x86"
+        },
+        {
+          "filename": "pydantic_core-2.46.5-cp312-cp312-win_amd64.whl",
+          "sha256": "5e81740c09e310f5aa5cbd3e434a01c154d4bef93241c7877b39f211d2b78ba8",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 18,
+      "bundled_binaries_sample": [
+        "pydantic_core/_pydantic_core.cpython-312-x86_64-linux-gnu.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pylance",
+      "version": "11.0.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "pylance-11.0.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+          "sha256": "a6d502e00ae739b64d379b0d778b5f61eeea652896ce0e7f8fd44bcc4d562047",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "pylance-11.0.0-cp310-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl",
+          "sha256": "503871c055267f2c8adeb5e7fb92584a69a9e016303e5cd9aba007de6cc9b602",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "pylance-11.0.0-cp310-abi3-macosx_11_0_arm64.whl",
+          "sha256": "9e58789c5165e7ea349b5d30c6047144f66034a4035bbf329cba9ec2fe575c4f",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "pylance-11.0.0-cp310-abi3-win_amd64.whl",
+          "sha256": "a8b24d5aa4e547228cedbc80cf6edddc354631cf023d5925f1e1704df748fb2f",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "Classifier",
+      "metadata_candidates": {
+        "Classifier": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 4,
+      "bundled_binaries_sample": [
+        "lance/lance.abi3.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "pynvvideocodec",
+      "version": "2.2.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-gpu",
+        "video"
+      ],
+      "artifacts": [
+        {
+          "filename": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl",
+          "sha256": "b29dd4ac5aefbe909b8d3d3e57e5a1e84aeea5c4c862116f90c0cd0193972cbb",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl",
+          "sha256": "c02ca70c1797cb02217c8366f2ebb28a35cf80c02a266ac640b68b189f4531d0",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl",
+          "sha256": "e8f7d8d858f4d0382ab04a4f6605d8890184a48e3654e7206bdd69cbc6279db8",
+          "platform": "windows-aarch64"
+        },
+        {
+          "filename": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl",
+          "sha256": "ff4561f48d41ddd0e36e7da92b6f848da325ebf2960097bf62616633fbca6def",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT, LGPL-2.1-or-later",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 30,
+      "bundled_binaries_sample": [
+        "PyNvVideoCodec/PyNvVideoCodec_121.cpython-312-x86_64-linux-gnu.so",
+        "PyNvVideoCodec/PyNvVideoCodec_130.cpython-312-x86_64-linux-gnu.so",
+        "PyNvVideoCodec/VersionCheck.cpython-312-x86_64-linux-gnu.so",
+        "PyNvVideoCodec/libavformat.so",
+        "PyNvVideoCodec/libavformat.so.62",
+        "PyNvVideoCodec/libavformat.so.62.12.102",
+        "PyNvVideoCodec/libavutil.so",
+        "PyNvVideoCodec/libavutil.so.60",
+        "PyNvVideoCodec/libavutil.so.60.26.102",
+        "pynvvideocodec./libcudart-c64a25f3.so.12.3.101"
+      ],
+      "gpl_lgpl_findings": [
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "sha256": "ed7c8b419b6591c7294c03b62558ca8247909b865f9ad2f765eb32fcb6a52206",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "sha256": "ed7c8b419b6591c7294c03b62558ca8247909b865f9ad2f765eb32fcb6a52206",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "sha256": "60ee4129d38ab18fc7253b5a9adaa0ea8ed1a073b397cec7636cec09474809d9",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "kind": "LGPL",
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "sha256": "60ee4129d38ab18fc7253b5a9adaa0ea8ed1a073b397cec7636cec09474809d9",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        }
+      ],
+      "ffmpeg_findings": [
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_x86_64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavformat.so.62.12.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/libavutil.so.60.26.102",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-manylinux_2_28_aarch64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_arm64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avformat-62.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "source": "bundled_binary_name",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "source": "bundled_binary_strings",
+          "path": "PyNvVideoCodec/avutil-60.dll",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        },
+        {
+          "source": "license_file",
+          "path": "pynvvideocodec-2.2.2.dist-info/licenses/NOTICES.txt",
+          "artifact": "pynvvideocodec-2.2.2-cp312-cp312-win_amd64.whl"
+        }
+      ],
+      "policy_status": "allowed_with_exception",
+      "exception_id": "NVBUG-6208455-4",
+      "violations": []
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+          "sha256": "a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0 AND BSD-3-Clause",
+      "declared_license": "Apache-2.0 AND BSD-3-Clause",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0 AND BSD-3-Clause",
+        "Classifier": "Apache-2.0 AND BSD-3-Clause",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "s3transfer",
+      "version": "0.19.2",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "s3transfer-0.19.2-py3-none-any.whl",
+          "sha256": "d8168eccca828cbb2cd573675333f3bddd254313a9c42494b84c76b539e8ba25",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0",
+        "Classifier": "Apache-2.0",
+        "shipped_files": "Apache-2.0",
+        "shipped_primary": "Apache-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "six-1.17.0-py2.py3-none-any.whl",
+          "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+          "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "PSF-2.0",
+      "declared_license": "PSF-2.0",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "PSF-2.0",
+        "shipped_files": "PSF-2.0",
+        "shipped_primary": "PSF-2.0"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "typing_extensions-4.16.0.dist-info/licenses/LICENSE: PSF-2.0 historical GPL-compatibility table (reviewed sha256 3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf)"
+      ],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview"
+      ],
+      "artifacts": [
+        {
+          "filename": "typing_inspection-0.4.4-py3-none-any.whl",
+          "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "cosmos-multiview",
+        "s3"
+      ],
+      "artifacts": [
+        {
+          "filename": "urllib3-2.8.0-py3-none-any.whl",
+          "sha256": "0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License-Expression",
+      "metadata_candidates": {
+        "License-Expression": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "warp-lang",
+      "version": "1.17.0",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "core"
+      ],
+      "artifacts": [
+        {
+          "filename": "warp_lang-1.17.0-py3-none-manylinux_2_28_x86_64.whl",
+          "sha256": "47cd93636828dd16e55eeb4e77a0e3547b5fb0f383000a3d228629df68f28fd8",
+          "platform": "linux-x86_64"
+        },
+        {
+          "filename": "warp_lang-1.17.0-py3-none-manylinux_2_34_aarch64.whl",
+          "sha256": "5051271048da956a8b94e2db9771ce60ce9591a3ac5bb49037f3d6812d1eea00",
+          "platform": "linux-aarch64"
+        },
+        {
+          "filename": "warp_lang-1.17.0-py3-none-macosx_11_0_arm64.whl",
+          "sha256": "f2fec43afb81caa2190c0b7fa3aaf4d869f3599839f0c40b9ead84331f91e993",
+          "platform": "macos-aarch64"
+        },
+        {
+          "filename": "warp_lang-1.17.0-py3-none-win_amd64.whl",
+          "sha256": "ca35c82242a7553046f09023bbe56750b5c3d9af72625bd1a905a56d3189771d",
+          "platform": "windows-x86_64"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "Apache-2.0",
+      "declared_license": "Apache-2.0",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "Apache-2.0",
+        "shipped_files": "Apache-2.0, MIT, LicenseRef-NvidiaProprietary",
+        "shipped_primary": "Apache-2.0",
+        "component:warp_lang-1.17.0.dist-info/licenses/licenses/libmathdx-LICENSE.txt": "LicenseRef-NvidiaProprietary"
+      },
+      "disagreements": [],
+      "informational_notes": [
+        "warp_lang-1.17.0.dist-info/licenses/licenses/cuda-LICENSE.txt: first-party NVIDIA CUDA runtime supplement notice (reviewed sha256 13706475591754a762162b3a27b17cb543515eeb1b5d0aa7df69b587339b19b8)",
+        "warp_lang-1.17.0.dist-info/licenses/licenses/llvm-LICENSE.txt: Apache-2.0 WITH LLVM-exception GPLv2-compatibility clause (reviewed sha256 8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee)",
+        "warp_lang-1.17.0.dist-info/licenses/licenses/nvrtc-LICENSE.txt: first-party NVIDIA NVRTC runtime supplement notice (reviewed sha256 b981e1c574a9e8fc2f2aabe7ebed000e4a9e2874c6d50b49174ec0d5a8a5a831)"
+      ],
+      "bundled_binaries_count": 8,
+      "bundled_binaries_sample": [
+        "warp/bin/warp-clang.so",
+        "warp/bin/warp.so"
+      ],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    },
+    {
+      "name": "zarr",
+      "version": "2.18.7",
+      "source": {
+        "registry": "https://pypi.org/simple"
+      },
+      "reached_by_extras": [
+        "all-cpu",
+        "all-gpu",
+        "umi"
+      ],
+      "artifacts": [
+        {
+          "filename": "zarr-2.18.7-py3-none-any.whl",
+          "sha256": "ac3dc4033e9ae4e9d7b5e27c97ea3eaf1003cc0a07f010bd83d5134bf8c4b223",
+          "platform": "any"
+        }
+      ],
+      "unscanned_artifacts": [],
+      "license": "MIT",
+      "declared_license": "MIT",
+      "license_source": "License",
+      "metadata_candidates": {
+        "License": "MIT",
+        "Classifier": "MIT",
+        "shipped_files": "MIT",
+        "shipped_primary": "MIT"
+      },
+      "disagreements": [],
+      "informational_notes": [],
+      "bundled_binaries_count": 0,
+      "bundled_binaries_sample": [],
+      "gpl_lgpl_findings": [],
+      "ffmpeg_findings": [],
+      "policy_status": "allowed",
+      "exception_id": null,
+      "violations": []
+    }
+  ],
+  "developer_only": {
+    "locked_packages": [
+      {
+        "name": "accessible-pygments",
+        "versions": [
+          "0.0.5"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "alabaster",
+        "versions": [
+          "1.0.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "babel",
+        "versions": [
+          "2.18.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "beautifulsoup4",
+        "versions": [
+          "4.15.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "braceexpand",
+        "versions": [
+          "0.1.7"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "certifi",
+        "versions": [
+          "2026.7.22"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "charset-normalizer",
+        "versions": [
+          "3.5.1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "colorama",
+        "versions": [
+          "0.4.6"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test",
+          "group:docs"
+        ]
+      },
+      {
+        "name": "coverage",
+        "versions": [
+          "7.16.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "docutils",
+        "versions": [
+          "0.22.4"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "execnet",
+        "versions": [
+          "2.1.2"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "idna",
+        "versions": [
+          "3.19"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "imagesize",
+        "versions": [
+          "2.0.1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "iniconfig",
+        "versions": [
+          "2.3.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "jinja2",
+        "versions": [
+          "3.1.6"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "markdown-it-py",
+        "versions": [
+          "4.2.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "markupsafe",
+        "versions": [
+          "3.0.3"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "mdit-py-plugins",
+        "versions": [
+          "0.6.1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "mdurl",
+        "versions": [
+          "0.1.2"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "myst-parser",
+        "versions": [
+          "5.1.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "nvidia-sphinx-theme",
+        "versions": [
+          "0.0.9.post1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "ovrtx",
+        "versions": [
+          "0.7.0.1794596436"
+        ],
+        "reached_by": [
+          "extra:dev"
+        ]
+      },
+      {
+        "name": "ovstage",
+        "versions": [
+          "0.4.0.1794520352"
+        ],
+        "reached_by": [
+          "extra:dev"
+        ]
+      },
+      {
+        "name": "packaging",
+        "versions": [
+          "25.0",
+          "26.3"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test",
+          "group:docs"
+        ]
+      },
+      {
+        "name": "pluggy",
+        "versions": [
+          "1.6.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "py-cpuinfo2",
+        "versions": [
+          "10.1.1"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "pydata-sphinx-theme",
+        "versions": [
+          "0.21.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "pygments",
+        "versions": [
+          "2.21.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test",
+          "group:docs"
+        ]
+      },
+      {
+        "name": "pytest",
+        "versions": [
+          "9.1.1"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "pytest-benchmark",
+        "versions": [
+          "5.3.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "pytest-cov",
+        "versions": [
+          "7.1.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "pytest-xdist",
+        "versions": [
+          "3.8.0"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "pyyaml",
+        "versions": [
+          "6.0.3"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test",
+          "group:docs"
+        ]
+      },
+      {
+        "name": "requests",
+        "versions": [
+          "2.34.2"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "roman-numerals",
+        "versions": [
+          "4.1.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "ruff",
+        "versions": [
+          "0.15.16"
+        ],
+        "reached_by": [
+          "extra:dev",
+          "extra:dev-cpu"
+        ]
+      },
+      {
+        "name": "snowballstemmer",
+        "versions": [
+          "3.1.1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "soupsieve",
+        "versions": [
+          "4.1.2"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinx",
+        "versions": [
+          "9.1.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinx-copybutton",
+        "versions": [
+          "0.5.2"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinx-design",
+        "versions": [
+          "0.7.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-applehelp",
+        "versions": [
+          "2.0.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-devhelp",
+        "versions": [
+          "2.0.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-htmlhelp",
+        "versions": [
+          "2.1.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-jsmath",
+        "versions": [
+          "1.0.1"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-qthelp",
+        "versions": [
+          "2.0.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "sphinxcontrib-serializinghtml",
+        "versions": [
+          "2.0.0"
+        ],
+        "reached_by": [
+          "group:docs"
+        ]
+      },
+      {
+        "name": "tomli",
+        "versions": [
+          "2.4.1"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      },
+      {
+        "name": "webdataset",
+        "versions": [
+          "1.0.2"
+        ],
+        "reached_by": [
+          "extra:all",
+          "extra:dev",
+          "extra:dev-cpu",
+          "extra:test"
+        ]
+      }
+    ],
+    "conformance_requirements": [
+      {
+        "file": "tests/requirements/groot-n1.7-conformance.txt",
+        "requirement": "gr00t @ git+https://github.com/NVIDIA/Isaac-GR00T.git@23ace64f17aa5015259b8609d371eb61a357c776",
+        "package": "gr00t"
+      },
+      {
+        "file": "tests/requirements/lerobot-lance-conformance.txt",
+        "requirement": "lerobot-lancedb==0.3.1",
+        "package": "lerobot-lancedb"
+      },
+      {
+        "file": "tests/requirements/lerobot-lance-conformance.txt",
+        "requirement": "lerobot[dataset]==0.7.0",
+        "package": "lerobot"
+      },
+      {
+        "file": "tests/requirements/lerobot-lance-conformance.txt",
+        "requirement": "datasets>=5.2",
+        "package": "datasets"
+      },
+      {
+        "file": "tests/requirements/lerobot-lance-conformance.txt",
+        "requirement": "fsspec>=2026.6",
+        "package": "fsspec"
+      },
+      {
+        "file": "tests/requirements/lerobot-v3-conformance.txt",
+        "requirement": "lerobot[dataset]==0.7.0",
+        "package": "lerobot"
+      },
+      {
+        "file": "tests/requirements/lerobot-v3-conformance.txt",
+        "requirement": "datasets>=5.2",
+        "package": "datasets"
+      },
+      {
+        "file": "tests/requirements/lerobot-v3-conformance.txt",
+        "requirement": "fsspec>=2026.6",
+        "package": "fsspec"
+      }
+    ]
+  }
+}

@@ -37,7 +37,7 @@ from ovannotators.backends.webdataset import SampleFiles, _component_suffix
 from ovannotators.config import config_to_dict
 from ovannotators.exceptions import ConfigurationError, PackagingError
 from ovannotators.writers.basic import BasicWriter
-from ovannotators.writers.bop import BOPWriter
+from ovannotators.writers.bop import MASK_LAYOUT, MASK_LAYOUT_FILE, BOPWriter
 from ovannotators.writers.coco import COCOWriter
 from ovannotators.writers.kitti import KITTIWriter
 from ovannotators.writers.yolo import YOLOWriter, YOLOWriterConfig
@@ -595,8 +595,9 @@ class BOPFrameAdapter(CaptureAdapter):
 
         Raises:
             PackagingError: If frames disagree with ``scene_camera.json``, a
-                frame lacks RGB or depth, values are non-finite, or a file
-                under ``root`` belongs to no sample or scene document.
+                frame lacks RGB or depth, values are non-finite, the scene has
+                masks but no ``mask_layout.json`` marker, or a file under
+                ``root`` belongs to no sample or scene document.
         """
         scene_id = writer.config.scene_id
         name = f"{scene_id:06d}"
@@ -618,6 +619,7 @@ class BOPFrameAdapter(CaptureAdapter):
             for path in (root / name / directory).glob("*_*.png"):
                 index.setdefault(path.name.split("_", 1)[0], []).append(path)
             masks_by_frame[directory] = index
+        self._claim_mask_layout(root, name, masks_by_frame, context, claimed)
         result = []
         for frame in context.frame_ids:
             stem = f"{frame:06d}"
@@ -641,7 +643,7 @@ class BOPFrameAdapter(CaptureAdapter):
                 record[role] = None if entries is None else entries.get(frame)
             masks = []
             # _documents validated scene_gt and scene_gt_info per frame.
-            for entry in record["scene_gt"] or []:
+            for gt_index, entry in enumerate(record["scene_gt"] or []):
                 obj_id = entry.get("obj_id")
                 if (
                     isinstance(obj_id, bool)
@@ -651,10 +653,28 @@ class BOPFrameAdapter(CaptureAdapter):
                     raise PackagingError(f"BOP frame {frame} has obj_id {obj_id!r}")
                 references: dict[str, Any] = {"obj_id": obj_id}
                 for directory in self._MASK_DIRS:
-                    component = f"{directory}.{obj_id:06d}.png"
+                    component = f"{directory}.{gt_index:06d}.png"
                     references[directory] = component if component in files else None
                 masks.append(references)
                 object_ids.add(obj_id)
+            if record["scene_gt"] is not None:
+                referenced = {
+                    entry[directory]
+                    for entry in masks
+                    for directory in self._MASK_DIRS
+                    if entry[directory] is not None
+                }
+                unexpected = sorted(
+                    component
+                    for component in files
+                    if component.startswith(("mask.", "mask_visib."))
+                    and component not in referenced
+                )
+                if unexpected:
+                    raise PackagingError(
+                        f"BOP frame {frame} mask filenames must use ground-truth "
+                        f"indices; migrate legacy model-ID suffixes: {unexpected}"
+                    )
             record["masks"] = masks
             try:
                 text = json.dumps(record, allow_nan=False)
@@ -684,6 +704,44 @@ class BOPFrameAdapter(CaptureAdapter):
             )
         context.state["object_ids"] = sorted(object_ids)
         return result
+
+    @staticmethod
+    def _claim_mask_layout(
+        root: Path,
+        name: str,
+        masks_by_frame: Mapping[str, Mapping[str, list[Path]]],
+        context: AdapterContext,
+        claimed: set[Path],
+    ) -> None:
+        """Require the ground-truth-index marker before any mask is associated.
+
+        Mask suffixes are ``scene_gt`` list indices only when the scene holds
+        ``mask_layout.json``. Model-ID suffixes from earlier writers can also be
+        valid indices, so a scene with masks and no marker is rejected rather
+        than paired by position.
+        """
+        path = root / name / MASK_LAYOUT_FILE
+        if not path.is_file():
+            if any(masks_by_frame.values()):
+                raise PackagingError(
+                    f"{name}/{MASK_LAYOUT_FILE} is missing, so mask filename "
+                    "suffixes may be model IDs rather than ground-truth indices; "
+                    "migrate the masks and add the marker as described in the "
+                    "BOP writer documentation"
+                )
+            return
+        try:
+            layout = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as exc:
+            raise PackagingError(
+                f"{name}/{MASK_LAYOUT_FILE} is not valid UTF-8 JSON: {exc}"
+            ) from exc
+        if layout != MASK_LAYOUT:
+            raise PackagingError(
+                f"{name}/{MASK_LAYOUT_FILE} is {layout!r}; expected {MASK_LAYOUT!r}"
+            )
+        context.shared_paths["mask_layout"] = f"{name}/{MASK_LAYOUT_FILE}"
+        claimed.add(path)
 
     def dataset_metadata(self, state: Mapping[str, Any]) -> dict[str, Any]:
         """Return the sorted BOP object IDs observed across the dataset."""

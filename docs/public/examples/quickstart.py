@@ -42,9 +42,7 @@ render_product = "/Render/RenderProduct_001"
 
 # Use the first animation sample rather than USD Default time.
 ordinal = 1
-ovstage.population.open_usd(
-    stage, "tests/data/test_scene.usda", ordinal=ordinal, time_code=0.0
-)
+ovstage.population.open_usd(stage, "tests/data/test_scene.usda", ordinal, 0.0)
 stage.advance_write_floor(ordinal).wait()
 
 # USD time selects scene samples; a positive delta_time advances the sensor

@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     # Single source of truth: the version declared in pyproject.toml, read from
@@ -34,10 +34,31 @@ from ovannotators.backends import (
     BackendRegistry,
     DiskBackend,
     DiskBackendConfig,
-    S3Backend,
-    S3BackendConfig,
     OvstorageBackend,
     OvstorageBackendConfig,
+    S3Backend,
+    S3BackendConfig,
+)
+from ovannotators.backends.webdataset import (
+    SampleFiles,
+    WebDatasetPackager,
+    WebDatasetPackagerConfig,
+)
+from ovannotators.capture import (
+    CaptureEpisode,
+    DatasetCapture,
+    export_finalized_dataset,
+)
+from ovannotators.capture_adapters import (
+    AdapterContext,
+    BasicFrameAdapter,
+    BasicVideoEpisodeAdapter,
+    BOPFrameAdapter,
+    CaptureAdapter,
+    ClipSpan,
+    COCOFrameAdapter,
+    KITTIFrameAdapter,
+    YOLOFrameAdapter,
 )
 from ovannotators.config import config_from_dict, config_to_dict
 from ovannotators.exceptions import (
@@ -50,20 +71,27 @@ from ovannotators.exceptions import (
     PackagingError,
     ValidationError,
 )
-from ovannotators.renderer_outputs import (
-    OvrtxOutput,
-    RendererOutput,
-    RendererOutputRegistry,
-)
 from ovannotators.profile_writers import (
     ConformanceResult,
+    CosmosMaterializationConfig,
     CosmosMultiviewWriter,
     CosmosMultiviewWriterConfig,
-    CosmosMaterializationConfig,
     CosmosQAConfig,
     CosmosValidationFinding,
     CosmosValidationRecord,
     EpisodeEnvelope,
+    GrootActionModality,
+    GrootLeRobotV2Writer,
+    GrootLeRobotV2WriterConfig,
+    GrootNormalizationConfig,
+    GrootStateModality,
+    GrootVideoModality,
+    LeRobotLanceFeatureSpec,
+    LeRobotLanceWriter,
+    LeRobotLanceWriterConfig,
+    LeRobotV3FeatureSpec,
+    LeRobotV3Writer,
+    LeRobotV3WriterConfig,
     LossReport,
     NamedTensor,
     ProfileMetadata,
@@ -75,33 +103,21 @@ from ovannotators.profile_writers import (
     UMIReplayBufferWriter,
     UMIReplayBufferWriterConfig,
     WriterRecord,
-    GrootActionModality,
-    GrootLeRobotV2Writer,
-    GrootLeRobotV2WriterConfig,
-    GrootNormalizationConfig,
-    GrootStateModality,
-    GrootVideoModality,
     validate_groot_lerobot_v2,
+    validate_lerobot_v3_canonical,
 )
-from ovannotators.writers import (
-    BasicWriter,
-    BasicWriterConfig,
-    BOPWriter,
-    BOPWriterConfig,
-    COCOWriter,
-    COCOWriterConfig,
-    CosmosTransferWriter,
-    CosmosTransferWriterConfig,
-    KITTIWriter,
-    KITTIWriterConfig,
-    LeRobotWriter,
-    LeRobotWriterConfig,
-    OpenLABELWriter,
-    OpenLABELWriterConfig,
-    Writer,
-    WriterRegistry,
-    YOLOWriter,
-    YOLOWriterConfig,
+from ovannotators.renderer_outputs import (
+    OvrtxOutput,
+    RendererOutput,
+    RendererOutputRegistry,
+)
+from ovannotators.requirements import (
+    DatasetOption,
+    DatasetProfile,
+    DatasetRequirements,
+    describe_requirements,
+    list_profiles,
+    register_dataset_profiles,
 )
 from ovannotators.types import (
     BBox2D,
@@ -110,37 +126,31 @@ from ovannotators.types import (
     PointCloudResult,
     Resolution,
 )
-
-from ovannotators.backends.webdataset import (
-    SampleFiles,
-    WebDatasetPackager,
-    WebDatasetPackagerConfig,
-)
-
-from ovannotators.capture import (
-    CaptureEpisode,
-    DatasetCapture,
-    export_finalized_dataset,
-)
-from ovannotators.capture_adapters import (
-    AdapterContext,
-    BasicFrameAdapter,
-    BOPFrameAdapter,
-    BasicVideoEpisodeAdapter,
-    CaptureAdapter,
-    ClipSpan,
-    COCOFrameAdapter,
-    KITTIFrameAdapter,
-    YOLOFrameAdapter,
-)
-
-from ovannotators.requirements import (
-    DatasetOption,
-    DatasetProfile,
-    DatasetRequirements,
-    describe_requirements,
-    list_profiles,
-    register_dataset_profiles,
+from ovannotators.writers import (
+    BasicWriter,
+    BasicWriterConfig,
+    BOPWriter,
+    BOPWriterConfig,
+    CenterPoseWriter,
+    CenterPoseWriterConfig,
+    COCOWriter,
+    COCOWriterConfig,
+    CosmosTransferWriter,
+    CosmosTransferWriterConfig,
+    DOPEWriter,
+    DOPEWriterConfig,
+    KITTIWriter,
+    KITTIWriterConfig,
+    LeRobotWriter,
+    LeRobotWriterConfig,
+    OpenLABELWriter,
+    OpenLABELWriterConfig,
+    Writer,
+    WriterRegistry,
+    YCBVideoWriter,
+    YCBVideoWriterConfig,
+    YOLOWriter,
+    YOLOWriterConfig,
 )
 
 __all__ = [
@@ -189,6 +199,13 @@ __all__ = [
     "CosmosQAConfig",
     "CosmosValidationFinding",
     "CosmosValidationRecord",
+    "LeRobotLanceFeatureSpec",
+    "LeRobotLanceWriter",
+    "LeRobotLanceWriterConfig",
+    "LeRobotV3FeatureSpec",
+    "LeRobotV3Writer",
+    "LeRobotV3WriterConfig",
+    "validate_lerobot_v3_canonical",
     "GrootActionModality",
     "GrootLeRobotV2Writer",
     "GrootLeRobotV2WriterConfig",
@@ -227,6 +244,12 @@ __all__ = [
     "YOLOWriterConfig",
     "BOPWriter",
     "BOPWriterConfig",
+    "DOPEWriter",
+    "DOPEWriterConfig",
+    "CenterPoseWriter",
+    "CenterPoseWriterConfig",
+    "YCBVideoWriter",
+    "YCBVideoWriterConfig",
     "LeRobotWriter",
     "LeRobotWriterConfig",
     "OpenLABELWriter",

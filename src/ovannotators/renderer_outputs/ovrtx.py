@@ -53,8 +53,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# ovrtx emits some annotators as opaque byte buffers (a packed struct table
-# plus a trailing entry count) rather than ready-to-use arrays. Decoding those
+# ovrtx emits annotators in a renderer-specific form rather than ready-to-use
+# arrays: ovrtx 0.5 and 0.6 as opaque byte buffers (a packed struct table plus a
+# trailing entry count), ovrtx 0.7 as named tensors and params. Decoding those
 # payloads into the structured arrays writers consume is ovrtx-specific, so it
 # belongs here in the extractor — a writer would otherwise have to know which
 # renderer produced its input. Maps each ovrtx ``sourceName`` to its decoder.
@@ -80,6 +81,8 @@ def _annotator_decoders() -> dict[str, Any]:
             decode_camera_params,
             decode_id_string_map,
             decode_instance_map,
+            decode_instance_token_map,
+            decode_occlusion,
             decode_semantic_id_map,
             decode_stable_id_semantic_id_map,
         )
@@ -92,6 +95,8 @@ def _annotator_decoders() -> dict[str, Any]:
             "StableIdMap": decode_id_string_map,
             "StableIdSemanticIdMap": decode_stable_id_semantic_id_map,
             "InstanceMap": decode_instance_map,
+            "InstanceIdTokenMapSD": decode_instance_token_map,
+            "OcclusionSD": decode_occlusion,
             "CameraParams": decode_camera_params,
         }
     return _ANNOTATOR_DECODERS

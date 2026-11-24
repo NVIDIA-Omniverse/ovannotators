@@ -143,8 +143,27 @@ CUDA 12, ``ovrtx``, and ``ovstage``. ``ovstage`` installs from PyPI; the
 
 .. code-block:: bash
 
+   pip install ovannotators "ovrtx>=0.5,<0.8" "ovstage>=0.2,<0.5" \
+       --extra-index-url https://pypi.nvidia.com/
+
+Install ``ovrtx`` and ``ovstage`` from the same release train: ovrtx 0.5 with
+ovstage 0.2, ovrtx 0.6 with ovstage 0.3, or ovrtx 0.7 with ovstage 0.4. From
+0.6, ovrtx rejects an incompatible ovstage when the renderer attaches the
+stage; ovrtx 0.5 does not check, so a mismatched pair fails later.
+
+The ranges above resolve to the newest pair. They cannot express the pairing,
+so an environment that already holds ovrtx 0.5 can still receive ovstage 0.4.
+To stay on ovrtx 0.5, pin both packages:
+
+.. code-block:: bash
+
    pip install ovannotators "ovrtx>=0.5,<0.6" "ovstage>=0.2,<0.3" \
        --extra-index-url https://pypi.nvidia.com/
+
+The examples pass the stage time to ``ovstage.population.open_usd`` and
+``update_from_usd_time`` positionally. ovstage 0.2 names that argument
+``time_code`` and ovstage 0.3 and later name it ``time``, so a keyword call
+works with only one of them.
 
 The application owns the stage; each population update is published before the
 renderer consumes it.

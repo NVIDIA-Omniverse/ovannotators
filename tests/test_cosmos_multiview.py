@@ -233,6 +233,66 @@ def test_finalize_rejects_candidate_with_no_materialized_windows(
 
 
 @pytest.mark.integration
+def test_buffer_reuse_preserves_source_resources_and_materialized_assets(
+    tmp_path: Path, priority_profile_fixture
+):
+    episode = priority_profile_fixture.episodes[0]
+    samples = priority_profile_fixture.samples[0]
+    observations = dict(samples[0].observations)
+    policy_signals = dict(samples[0].policy_signals)
+    buffers = {**observations, **policy_signals}
+    expected = {
+        key: np.stack(
+            [
+                ({**sample.observations, **sample.policy_signals})[key].data.copy()
+                for sample in samples
+            ]
+        )
+        for key in buffers
+    }
+    missing_data = {}
+    backend = DiskBackend(DiskBackendConfig(tmp_path))
+    writer = CosmosMultiviewWriter(_config())
+    writer.begin_episode(episode, backend)
+    for index, sample in enumerate(samples):
+        for key, tensor in buffers.items():
+            np.copyto(tensor.data, expected[key][index])
+        writer.write_sample(
+            dataclasses.replace(
+                sample,
+                observations=observations,
+                policy_signals=policy_signals,
+                missing_data=missing_data,
+            ),
+            backend,
+        )
+    for tensor in buffers.values():
+        tensor.data.fill(99)
+    observations.clear()
+    policy_signals.clear()
+    missing_data["camera.front"] = "caller changed the mapping"
+    assert all(not sample.missing_data for sample in writer._current_samples)
+    writer.end_episode(backend)
+    rows = writer.register_episodes(backend)
+    prefix = writer.config.output_base_uri + "/"
+    for stream in rows[0]["streams"]:
+        source = np.load(tmp_path / stream["data_uri"].removeprefix(prefix))
+        np.testing.assert_array_equal(source, expected[stream["stream_id"]])
+    for tensor in buffers.values():
+        tensor.data.fill(42)
+    rows = writer.materialize_samples(backend)
+    assert rows
+    for row in rows:
+        assets = json.loads(row["assets_json"])["assets"]
+        front = next(asset for asset in assets if asset["stream_id"] == "camera.front")
+        materialized = np.load(tmp_path / front["uri"].removeprefix(prefix))
+        start = 0 if row["source_start_offset_s"] == 0 else 1
+        np.testing.assert_array_equal(
+            materialized, expected["camera.front"][start : start + 2]
+        )
+
+
+@pytest.mark.integration
 def test_two_stage_output_has_exact_typed_tables_and_unverified_qa(
     tmp_path: Path, priority_profile_fixture
 ):

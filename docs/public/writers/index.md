@@ -17,13 +17,16 @@ reference; not every upstream feature is implemented here.
 | [yolo](yolo.md) | Detection and instance polygons | None |
 | [openlabel](openlabel.md) | ASAM OpenLABEL image boxes and instance polygons | None |
 | [bop](bop.md) | Object pose datasets | None |
+| [dope](dope.md) | Object pose keypoints for DOPE training | None |
+| [centerpose](centerpose.md) | Category-level object pose for CenterPose training | None |
+| [ycb_video](ycb_video.md) | Object pose in YCB-Video layout | None |
 | [lerobot](lerobot.md) | Simple frame-based episode video | `[lerobot,video]`, NVENC |
 | [cosmos_transfer](cosmos_transfer.md) | RGB and visual conditioning clips | `[video]`, NVENC |
-| [lerobot_v3](lerobot_v3.md) | Coming soon: timed robot state/action and cameras | Not available in 0.2.0 |
+| [lerobot_v3](lerobot_v3.md) | Timed robot state/action and cameras | `[lerobot,video]`, NVENC |
 | [cosmos_multiview](cosmos_multiview.md) | Episode registration and aligned candidate samples | `[cosmos-multiview]` |
 
-The `groot_lerobot_v2` and `umi_replay_buffer` episode profiles are described in
-the [API reference](../api.rst), not on a page here.
+The `lerobot_lance`, `groot_lerobot_v2`, and `umi_replay_buffer` episode
+profiles are described in the [API reference](../api.rst), not on a page here.
 
 ## Frame Writer Workflow
 
@@ -32,6 +35,12 @@ and `finalize(backend)`. Finalization is mandatory because some writers defer
 publishing aggregate metadata or buffered videos until this step. All backend
 output paths are relative to the configured root directory. Use a distinct
 destination for each writer to prevent file overwrites.
+
+COCO, BOP, and YOLO freeze their aggregate metadata when `finalize()` starts
+and reject subsequent `write_frame()` calls with `ValueError`. If a backend
+operation raises, retry `finalize()` on the same writer and backend after
+storage recovers. Completed metadata writes are retained, so the retry works
+with `overwrite=False`. A successful finalization is idempotent.
 
 This complete CPU example writes an image and a depth array:
 
@@ -117,6 +126,9 @@ kitti
 yolo
 openlabel
 bop
+dope
+centerpose
+ycb_video
 lerobot
 cosmos_transfer
 lerobot_v3

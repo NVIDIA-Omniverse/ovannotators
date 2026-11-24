@@ -10,12 +10,12 @@ that source tree; edit only ``skills/``.
 
 The following workflows are available:
 
+* ``ovannotators-dataset-quickstart`` for producing and inspecting a small labeled COCO
+  dataset, on CPU by default.
+* ``ovannotators-dataset-capture`` for choosing a writer, profile, frame source, and backend,
+  then capturing and verifying a dataset.
 * ``new-writer`` for adding an output-format writer.
 * ``new-backend`` for adding a storage backend.
-* ``test-creation``, ``test-classification``, ``test-coverage``, and
-  ``test-triage`` for maintaining the test suite.
-* ``gpu-verification`` for exercising the renderer and NVENC paths that the
-  CPU-only test lane cannot reach.
 
 Use the :doc:`api` reference as the public API contract. Every substantial API
 example in a shipped skill points to a named snippet under ``tests/docs/python``.

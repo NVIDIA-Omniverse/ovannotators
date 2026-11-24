@@ -26,7 +26,12 @@ import pytest
 import warp as wp
 
 from ovannotators._internal.codecs import NvVideoEncoder, get_video_encoder
-from ovannotators._internal.mp4_mux import mux_hevc_annexb
+from ovannotators._internal.mp4_mux import (
+    concatenate_mp4_tracks,
+    mux_hevc_annexb,
+    parse_mp4_video_index,
+    validate_mp4_clip,
+)
 from ovannotators.backends import DiskBackend, DiskBackendConfig
 from ovannotators.writers import (
     BasicWriter,
@@ -65,7 +70,7 @@ def _box_payload(data, kind):
 @pytest.mark.parametrize(
     "options",
     [
-        {"video_codec": "av1"},
+        {"video_codec": "vp9"},
         {"video_lossless": True},
         {"video_preset": "P8"},
         {"video_lossless": "yes"},
@@ -82,6 +87,7 @@ def test_invalid_writer_video_options(config, options):
         ("h264", False, None, "ARGB"),
         ("hevc", False, "P4", "ARGB"),
         ("hevc", True, None, "YUV444"),
+        ("av1", False, "P4", "ARGB"),
     ],
 )
 def test_encoder_configuration_and_frame_packing(codec, lossless, preset, format):
@@ -148,6 +154,31 @@ def test_hevc_mux_samples_parameter_sets_and_timing():
     offset = struct.unpack_from(">I", _box_payload(mp4, b"stco"), 8)[0]
     assert mp4[offset:] == mdat
     assert _VPS not in mdat and _PPS not in mdat
+
+
+@pytest.mark.parametrize("corruption", ["missing", "version", "parameter set size"])
+def test_hevc_index_and_concatenation_validate_decoder_configuration(corruption):
+    clip = mux_hevc_annexb(_annexb(_VPS, _SPS, _PPS, _IDR, _P), 24, 256, 256)
+    index = parse_mp4_video_index(clip)
+    assert index["kf_indices"] == [0]
+    assert validate_mp4_clip(
+        clip, frame_count=2, fps=24, width=256, height=256, codec="hevc"
+    ) == pytest.approx(2 / 24)
+    assert parse_mp4_video_index(concatenate_mp4_tracks([clip, clip]))[
+        "kf_indices"
+    ] == [0, 2]
+    bad = bytearray(clip)
+    config = bad.index(b"hvcC")
+    if corruption == "missing":
+        bad[config : config + 4] = b"free"
+    elif corruption == "version":
+        bad[config + 4] = 0
+    else:
+        struct.pack_into(">H", bad, config + 4 + 26, 0xFFFF)
+    with pytest.raises(ValueError, match="HEVC|hevc.*decoder configuration"):
+        parse_mp4_video_index(bytes(bad))
+    with pytest.raises(ValueError, match="decoder configuration"):
+        concatenate_mp4_tracks([bytes(bad)])
 
 
 @pytest.mark.parametrize(
